@@ -1,77 +1,77 @@
 # TmdbCacheX
 
-TmdbCacheX is a high-performance TMDB (The Movie Database) caching proxy server built with Node.js, Fastify, and Prisma (SQLite). It is designed to cache TMDB API responses to reduce rate limiting and improve response times for media server applications.
+TmdbCacheX 是一个基于 Node.js, Fastify 和 Prisma (SQLite) 构建的高性能 TMDB (The Movie Database) 缓存代理服务器。它的设计目的是为了缓存 TMDB API 的响应，从而减少对 TMDB 的请求频率（避免速率限制）并提高媒体服务器应用程序的响应速度。
 
-## Features
+## 功能特性 (Features)
 
-*   **Caching Proxy**: Proxies requests to TMDB and caches the responses in a local SQLite database.
-*   **Database Simulation**: Can serve cached data directly from the database without hitting the TMDB API.
-*   **Prefetching**: Includes scripts to prefetch data for popular movies and TV shows.
-*   **Studio Verification**: Tools to verify and simulate database entries.
+*   **缓存代理 (Caching Proxy)**: 代理对 TMDB 的请求，并将响应结果缓存到本地 SQLite 数据库中。
+*   **数据库模拟 (Database Simulation)**: 可以直接从数据库提供缓存的数据，完全无需访问 TMDB API。
+*   **预取 (Prefetching)**: 包含预取脚本，用于提前获取热门电影和电视剧的数据。
+*   **Studio 验证**: 提供工具来验证和模拟数据库中的条目。
 
-## Installation
+## 安装 (Installation)
 
-1.  Clone the repository:
+1.  克隆仓库:
     ```bash
-    git clone <your-repo-url>
+    git clone <你的仓库地址>
     cd TmdbCacheX
     ```
 
-2.  Install dependencies:
+2.  安装依赖:
     ```bash
     npm install
     ```
 
-## Configuration
+## 配置 (Configuration)
 
-1.  Create a `.env` file in the root directory (copy from example if available, or use the template below):
+1.  在根目录下创建一个 `.env` 文件 (可以参考示例文件，或者直接使用下面的模板):
 
     ```env
     DATABASE_URL="file:./prisma/dev.db"
-    TMDB_API_KEY="your_tmdb_api_key_here"
-    TMDB_PROXY_URL="http://your_proxy_url_if_needed"
+    TMDB_API_KEY="你的_TMDB_API_KEY"
+    TMDB_PROXY_URL="http://你的代理地址_如果有的话"
     ```
 
-    *   `DATABASE_URL`: Path to the SQLite database file. Ideally, keep it in `prisma/dev.db`.
-    *   `TMDB_API_KEY`: Your TMDB API Read Access Token or API Key.
-    *   `TMDB_PROXY_URL`: (Optional) Proxy URL for outbound TMDB requests.
+    *   `DATABASE_URL`: SQLite 数据库文件的路径。建议保留为 `prisma/dev.db`。
+    *   `TMDB_API_KEY`: 你的 TMDB API 读取访问令牌或 API Key。
+    *   `TMDB_PROXY_URL`: (可选) 用于 TMDB 请求的代理服务器 URL。
 
-## Database Setup (Important)
+## 数据库设置 (重要)
 
-**This repository does not include the database file (`dev.db`) used for caching.**
+**本仓库不包含用于缓存数据的数据库文件 (`dev.db`)。**
 
-To use the pre-filled cache database:
+如果您想使用预先填充好数据的缓存数据库，请执行以下操作：
 
-1.  Go to the **Releases** page of this GitHub repository.
-2.  Download the `dev.db` file from the latest release assets.
-3.  Place the `dev.db` file into the `prisma/` folder of this project:
+1.  前往本 GitHub 仓库的 **Releases (发行版)** 页面。
+2.  在最新的 Release 中下载 `dev.db` 文件。
+3.  将 `dev.db` 文件放入本项目的 `prisma/` 文件夹中:
     ```
     TmdbCacheX/prisma/dev.db
     ```
-4.  Ensure your `.env` file points to this location:
+4.  确保你的 `.env` 文件指向了这个位置:
     ```env
     DATABASE_URL="file:./prisma/dev.db"
     ```
 
-## Usage
+## 使用方法 (Usage)
 
-### Development Server
-Run the server with hot-reloading:
+### 开发服务器 (Development)
+启动带有热重载功能的开发服务器:
 ```bash
 npm run dev
 ```
 
-### Production Start
-Build and start the server:
+### 生产环境启动 (Production)
+编译并启动服务器:
 ```bash
 npm run start
 ```
 
-### Other Scripts
--   `npm run prefetch`: Run the prefetch script to populate the cache.
--   `npm run simulate`: Run the simulation script.
--   `npm run scrape`: Run the scraper.
--   `npm run db:studio`: Open Prisma Studio to inspect the database.
+### 其他脚本 (Scripts)
+-   `npm run prefetch`: 运行预取脚本以填充缓存。
+-   `npm run simulate`: 运行模拟脚本。
+-   `npm run scrape`: 运行爬虫/抓取脚本。
+-   `npm run db:studio`: 打开 Prisma Studio 图形化界面查看数据库。
 
 ## License
 
