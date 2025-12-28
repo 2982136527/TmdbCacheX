@@ -1,0 +1,17 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model TmdbCache {
+  id        Int      @id @default(autoincrement())
+  url       String   @unique
+  response  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
