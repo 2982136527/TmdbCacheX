@@ -52,9 +52,37 @@ TmdbCacheX 是一个基于 Node.js, Fastify 和 Prisma (SQLite) 构建的高性�
     DATABASE_URL="file:./prisma/dev.db"
     ```
 
-## 使用方法 (Usage)
+## 详细配置与使用 (Configuration & Usage)
 
-### 开发服务器 (Development)
+### 1. 修改 API 密钥与其他配置
+所有配置都在 `.env` 文件中管理。如果你需要更换 TMDB API Key 或者更改代理设置，只需编辑此文件：
+
+1.  打开项目根目录下的 `.env` 文件。
+2.  **更改 API Key**: 修改 `TMDB_API_KEY` 的值。
+    ```env
+    TMDB_API_KEY="你的_新_API_KEY"
+    ```
+    *如果你发现请求被 TMDB 拒绝或速率限制，建议更换一个新的 Key。*
+
+3.  **更改网络代理**: 如果你的服务器无法直接访问 TMDB，请设置 `TMDB_PROXY_URL`。
+    ```env
+    TMDB_PROXY_URL="http://127.0.0.1:7890" 
+    ```
+    *如果不需要代理，请删除此行或将其留空。*
+
+4.  **修改后重启**: 修改 `.env` 文件后，必须**重启服务器**才能生效。
+
+### 2. 对接媒体服务器 (Client Setup)
+本服务启动后默认监听 `3333` 端口。你需要将你的媒体服务器（如 Emby, Jellyfin, Radarr, Sonarr 等）的 TMDB API 地址指向本服务。
+
+*   **服务地址**: `http://<你的服务器IP>:3333`
+*   **使用方式**:
+    *   本代理完全保留了 TMDB 的 URL 结构。
+    *   原请求: `https://api.themoviedb.org/3/movie/550?api_key=xxx`
+    *   代理请求: `http://localhost:3333/3/movie/550?api_key=xxx`
+
+### 3.启动服务器
+#### 开发模式 (Development)
 启动带有热重载功能的开发服务器:
 ```bash
 npm run dev
