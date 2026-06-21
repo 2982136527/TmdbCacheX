@@ -1,5 +1,3 @@
-![alt text](QQ_1766899956347.png)
-
 # TmdbCacheX
 
 [![Docker Hub](https://img.shields.io/docker/pulls/qiuhusama/tmdbcachex?label=Docker%20Hub&logo=docker&color=2496ED)](https://hub.docker.com/r/qiuhusama/tmdbcachex)
