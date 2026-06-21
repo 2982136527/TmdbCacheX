@@ -864,13 +864,14 @@
                 if (data.topItems.length === 0) {
                     topEl.textContent = '暂无数据';
                 } else {
-                    topEl.innerHTML = data.topItems.map((item, i) =>
-                        `<div class="flex items-center gap-3 py-1.5 ${i < 3 ? 'text-white' : ''}">
+                    topEl.innerHTML = data.topItems.map((item, i) => {
+                        const clickable = item.tmdbId ? `onclick="openDetail(${item.tmdbId})" class="flex items-center gap-3 py-1.5 cursor-pointer hover:bg-white/[0.04] rounded-lg px-2 -mx-2 transition-colors ${i < 3 ? 'text-white' : ''}"` : `class="flex items-center gap-3 py-1.5 ${i < 3 ? 'text-white' : ''}"`;
+                        return `<div ${clickable}>
                             <span class="text-xs w-5 text-right ${i < 3 ? 'text-pink-400 font-bold' : 'text-slate-500'}">${i + 1}</span>
                             <span class="flex-1 truncate">${item.title}</span>
                             <span class="text-xs text-slate-500">${item.count} 次</span>
-                        </div>`
-                    ).join('');
+                        </div>`;
+                    }).join('');
                 }
             } catch (e) {}
         }

@@ -642,8 +642,8 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             prisma.apiLog.count({ where: { hit: true } }),
             prisma.apiLog.count({ where: { source: 'external' } }),
             prisma.apiLog.groupBy({
-                by: ['title'],
-                where: { title: { not: null } },
+                by: ['title', 'url'],
+                where: { title: { not: null }, type: { in: ['movie', 'tv', 'person'] } },
                 _count: { title: true },
                 orderBy: { _count: { title: 'desc' } },
                 take: 10,
@@ -655,7 +655,15 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             today: todayCount,
             hitRate: total > 0 ? Math.round((hitCount / total) * 100) : 0,
             external: externalCount,
-            topItems: topItems.map(item => ({ title: item.title, count: item._count.title })),
+            topItems: topItems.map(item => {
+                const match = item.url.match(/\/(movie|tv|person)\/(\d+)/);
+                return {
+                    title: item.title,
+                    count: item._count.title,
+                    type: match ? match[1] : null,
+                    tmdbId: match && match[2] ? parseInt(match[2]) : null,
+                };
+            }),
         };
     });
 
