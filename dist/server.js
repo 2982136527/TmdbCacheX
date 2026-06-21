@@ -1,9 +1,10 @@
 import Fastify from 'fastify';
 import fs from 'fs';
 import path from 'path';
-import { handleTmdbRequest, prisma } from './proxy.js';
+import { handleTmdbRequest, prisma, getProxyConfig } from './proxy.js';
 import { config } from './config.js';
 import { adminRoutes } from './admin.js';
+import { getDnsAgent } from './dns-resolver.js';
 function parseApiType(url) {
     if (/\/movie\/\d+/.test(url))
         return 'movie';
@@ -39,20 +40,14 @@ async function proxyImage(imgPath, reply) {
     }
     try {
         const { default: axios } = await import('axios');
-        const proxyCfg = config.tmdb.httpProxy ? (() => {
-            try {
-                const url = new URL(config.tmdb.httpProxy);
-                return { proxy: { host: url.hostname, port: parseInt(url.port) || 80, protocol: url.protocol.replace(':', '') } };
-            }
-            catch {
-                return {};
-            }
-        })() : {};
+        const proxyCfg = getProxyConfig();
+        const dnsConfig = config.tmdb.resolveTmdbDns ? { httpsAgent: getDnsAgent() } : {};
         const response = await axios.get(`https://image.tmdb.org/t/p${imgPath}`, {
             responseType: 'arraybuffer',
             timeout: 15000,
             headers: { 'User-Agent': 'TmdbCacheX/1.0' },
             ...proxyCfg,
+            ...dnsConfig,
         });
         reply
             .header('Content-Type', response.headers['content-type'] || 'image/jpeg')
@@ -108,14 +103,39 @@ fastify.get('/*', async (request, reply) => {
         return data;
     }
     catch (err) {
-        const status = err.response?.status || 500;
-        if (status === 404) {
-            request.log.warn(`[404] Resource not found: ${url}`);
+        // Classify error type for better diagnostics
+        let status;
+        let errorMsg;
+        const errCode = err.code || '';
+        if (err.response?.status) {
+            // Upstream TMDB returned an error response
+            status = err.response.status;
+            errorMsg = status === 404 ? 'Resource not found'
+                : status === 429 ? 'Rate limited by upstream'
+                    : `Upstream error ${status}`;
+        }
+        else if (errCode === 'ECONNABORTED' || err.message?.includes('timeout')) {
+            status = 504;
+            errorMsg = 'Upstream timeout';
+        }
+        else if (errCode === 'ENOTFOUND' || errCode === 'EAI_AGAIN') {
+            status = 502;
+            errorMsg = 'DNS resolution failed';
+        }
+        else if (errCode === 'ECONNREFUSED' || errCode === 'ECONNRESET' || errCode === 'EHOSTUNREACH') {
+            status = 502;
+            errorMsg = 'Upstream unreachable';
         }
         else {
-            request.log.error(`[ERROR] Upstream request failed with status ${status}`);
+            status = 500;
+            errorMsg = 'Internal error';
         }
-        // Log failed external calls too
+        const logTag = `[${status}] ${errorMsg}`;
+        if (status === 404)
+            request.log.warn(`${logTag}: ${url}`);
+        else
+            request.log.error(`${logTag}: ${url} (${errCode || err.message})`);
+        // Log failed external calls
         if (!isInternal) {
             prisma.apiLog.create({
                 data: {
@@ -129,15 +149,7 @@ fastify.get('/*', async (request, reply) => {
                 }
             }).catch(() => { });
         }
-        if (status === 404) {
-            reply.code(404).send({ error: 'Resource not found' });
-        }
-        else if (status === 429) {
-            reply.code(429).send({ error: 'Rate limited by upstream' });
-        }
-        else {
-            reply.code(status).send({ error: 'Upstream request failed' });
-        }
+        reply.code(status).send({ error: errorMsg });
     }
 });
 // Graceful shutdown

@@ -126,7 +126,6 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         const forceProxy = query.proxy === '1';
         const img = (size: string, p: string | null) => imgUrl(size, p, forceProxy);
 
-        // Only query detail pages (much smaller than list pages, 30-50KB vs up to 3MB)
         const movieWhere = "url LIKE '3/movie/%' AND url NOT LIKE '3/movie/%/%/%'";
         const tvWhere = "url LIKE '3/tv/%' AND url NOT LIKE '3/tv/%/%/%'";
         const where = typeFilter === 'movie' ? movieWhere
@@ -134,15 +133,49 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             : `(${movieWhere} OR ${tvWhere})`;
 
         const seen = new Set<number>();
-        const items: any[] = [];
-        const fetchLimit = limit * 3; // extra buffer for dedup
-        const dbOffset = (page - 1) * fetchLimit;
+        const allMatched: any[] = [];
 
-        // Direct SQL query — only load detail page entries, not list pages
+        if (searchQuery) {
+            // Search mode: scan entries in batches, filter by title
+            const BATCH = 500;
+            let offset = 0;
+            const maxScan = 10000; // safety limit
+            while (allMatched.length < page * limit && offset < maxScan) {
+                const entries = await prisma.$queryRawUnsafe<Array<{ url: string; response: string }>>(
+                    `SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY id DESC LIMIT ${BATCH} OFFSET ${offset}`
+                );
+                if (entries.length === 0) break;
+                for (const entry of entries) {
+                    try {
+                        const data = JSON.parse(entry.response);
+                        if (!data.poster_path || seen.has(data.id)) continue;
+                        const isMovie = entry.url.startsWith('3/movie/');
+                        const title = (isMovie ? data.title : data.name) || '';
+                        if (!title.toLowerCase().includes(searchQuery)) continue;
+                        seen.add(data.id);
+                        allMatched.push({
+                            tmdbId: data.id, type: isMovie ? 'movie' : 'tv',
+                            title, posterPath: img('w500', data.poster_path),
+                            voteAverage: data.vote_average ?? 0,
+                            releaseDate: (isMovie ? data.release_date : data.first_air_date) || '',
+                        });
+                    } catch { /* skip */ }
+                }
+                offset += BATCH;
+            }
+            const total = allMatched.length;
+            const totalPages = Math.ceil(total / limit);
+            const items = allMatched.slice((page - 1) * limit, page * limit);
+            return { items, total, page, totalPages };
+        }
+
+        // No search: direct SQL pagination
+        const fetchLimit = limit * 3;
+        const dbOffset = (page - 1) * fetchLimit;
         const entries = await prisma.$queryRawUnsafe<Array<{ url: string; response: string }>>(
             `SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY id DESC LIMIT ${fetchLimit} OFFSET ${dbOffset}`
         );
-
+        const items: any[] = [];
         for (const entry of entries) {
             if (items.length >= limit) break;
             try {
@@ -159,14 +192,11 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
                 });
             } catch { /* skip */ }
         }
-
-        // Get total unique count (cached per typeFilter)
         const totalRow = await prisma.$queryRawUnsafe<Array<{ cnt: number }>>(
             `SELECT COUNT(*) as cnt FROM TmdbCache WHERE ${where}`
         );
         const total = Number(totalRow[0]?.cnt || 0);
         const totalPages = Math.ceil(total / limit);
-
         return { items, total, page, totalPages };
     });
 

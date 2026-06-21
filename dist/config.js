@@ -32,6 +32,7 @@ function loadConfig() {
             httpProxy: raw.tmdb?.httpProxy || '',
             authKey: raw.tmdb?.authKey || '',
             proxyImages: raw.tmdb?.proxyImages !== false, // default true
+            resolveTmdbDns: raw.tmdb?.resolveTmdbDns === true, // default false
         },
         server: {
             port: raw.server?.port || 3333,
@@ -52,6 +53,8 @@ export function updateConfig(partial) {
         config.tmdb.authKey = partial.tmdb.authKey;
     if (partial.tmdb?.proxyImages !== undefined)
         config.tmdb.proxyImages = partial.tmdb.proxyImages;
+    if (partial.tmdb?.resolveTmdbDns !== undefined)
+        config.tmdb.resolveTmdbDns = partial.tmdb.resolveTmdbDns;
     if (partial.logRetentionDays !== undefined)
         config.logRetentionDays = partial.logRetentionDays;
 }

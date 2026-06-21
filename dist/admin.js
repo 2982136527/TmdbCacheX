@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { prisma } from './proxy.js';
 import { config, updateConfig } from './config.js';
+import { testDnsConnectivity } from './dns-resolver.js';
 const startTime = Date.now();
 function imgUrl(size, imgPath, forceProxy = false) {
     if (!imgPath)
@@ -11,31 +12,44 @@ function imgUrl(size, imgPath, forceProxy = false) {
     return `https://image.tmdb.org/t/p/${size}${imgPath}`;
 }
 export async function adminRoutes(fastify, opts) {
-    // GET /admin/api/stats - Cache statistics
+    // Stats cache (30s TTL)
+    let statsCache = null;
+    let statsCacheTime = 0;
+    const STATS_TTL = 30_000;
+    // GET /admin/api/stats - Cache statistics (with 30s in-memory cache)
     fastify.get('/admin/api/stats', async () => {
-        const total = await prisma.tmdbCache.count();
-        const now = new Date();
-        const expired = await prisma.tmdbCache.count({
-            where: { expiresAt: { lt: now } }
-        });
-        // Count by content type
-        const allKeys = await prisma.tmdbCache.findMany({
-            select: { url: true },
-        });
-        let movies = 0, tvShows = 0, people = 0, lists = 0, other = 0;
-        for (const row of allKeys) {
-            const url = row.url;
-            if (/\/movie\/\d+/.test(url))
-                movies++;
-            else if (/\/tv\/\d+/.test(url))
-                tvShows++;
-            else if (/\/person\/\d+/.test(url))
-                people++;
-            else if (/\/(popular|top_rated|now_playing|on_the_air|airing_today|trending|discover)/.test(url))
-                lists++;
+        if (statsCache && Date.now() - statsCacheTime < STATS_TTL)
+            return statsCache;
+        const rows = await prisma.$queryRawUnsafe(`
+            SELECT 'total' as metric, COUNT(*) as cnt FROM TmdbCache
+            UNION ALL SELECT 'expired', COUNT(*) FROM TmdbCache WHERE expiresAt < ${Date.now()}
+            UNION ALL
+            SELECT
+                CASE
+                    WHEN url LIKE '%/movie/%' THEN 'movies'
+                    WHEN url LIKE '%/tv/%' THEN 'tvShows'
+                    WHEN url LIKE '%/person/%' THEN 'people'
+                    WHEN url LIKE '%/popular%' OR url LIKE '%/top_rated%' OR url LIKE '%/now_playing%'
+                        OR url LIKE '%/on_the_air%' OR url LIKE '%/airing_today%' OR url LIKE '%/trending%'
+                        OR url LIKE '%/discover%' THEN 'lists'
+                    ELSE 'other'
+                END as metric,
+                COUNT(*) as cnt
+            FROM TmdbCache GROUP BY metric
+        `);
+        const stats = { movies: 0, tvShows: 0, people: 0, lists: 0, other: 0 };
+        for (const row of rows) {
+            const v = Number(row.cnt);
+            if (row.metric === 'total')
+                stats.total = v;
+            else if (row.metric === 'expired')
+                stats.expired = v;
             else
-                other++;
+                stats[row.metric] = v;
         }
+        const total = stats.total || 0;
+        const expired = stats.expired || 0;
+        const breakdown = { movies: stats.movies, tvShows: stats.tvShows, people: stats.people, lists: stats.lists, other: stats.other };
         const uptimeMs = Date.now() - startTime;
         const uptimeHours = Math.floor(uptimeMs / 3600000);
         const uptimeMinutes = Math.floor((uptimeMs % 3600000) / 60000);
@@ -47,14 +61,17 @@ export async function adminRoutes(fastify, opts) {
             dbSize = stat.size;
         }
         catch { }
-        return {
+        const result = {
             total,
             expired,
             active: total - expired,
-            breakdown: { movies, tvShows, people, lists, other },
+            breakdown,
             uptime: { hours: uptimeHours, minutes: uptimeMinutes, ms: uptimeMs },
             dbSize,
         };
+        statsCache = result;
+        statsCacheTime = Date.now();
+        return result;
     });
     // GET /admin/api/cache - List cache entries with pagination and search
     fastify.get('/admin/api/cache', async (request) => {
@@ -80,7 +97,7 @@ export async function adminRoutes(fastify, opts) {
             prisma.tmdbCache.findMany({
                 where,
                 select: { id: true, url: true, createdAt: true, updatedAt: true, expiresAt: true },
-                orderBy: { updatedAt: 'desc' },
+                orderBy: { id: 'desc' },
                 skip,
                 take: limit,
             }),
@@ -103,71 +120,75 @@ export async function adminRoutes(fastify, opts) {
         const searchQuery = (query.search || '').toLowerCase();
         const forceProxy = query.proxy === '1';
         const img = (size, p) => imgUrl(size, p, forceProxy);
-        // Fetch all cache entries (we need to parse responses to extract posters)
-        const entries = await prisma.tmdbCache.findMany({
-            select: { id: true, url: true, response: true },
-            orderBy: { updatedAt: 'desc' },
-        });
+        const movieWhere = "url LIKE '3/movie/%' AND url NOT LIKE '3/movie/%/%/%'";
+        const tvWhere = "url LIKE '3/tv/%' AND url NOT LIKE '3/tv/%/%/%'";
+        const where = typeFilter === 'movie' ? movieWhere
+            : typeFilter === 'tv' ? tvWhere
+                : `(${movieWhere} OR ${tvWhere})`;
         const seen = new Set();
-        const allItems = [];
+        const allMatched = [];
+        if (searchQuery) {
+            // Search mode: scan entries in batches, filter by title
+            const BATCH = 500;
+            let offset = 0;
+            const maxScan = 10000; // safety limit
+            while (allMatched.length < page * limit && offset < maxScan) {
+                const entries = await prisma.$queryRawUnsafe(`SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY id DESC LIMIT ${BATCH} OFFSET ${offset}`);
+                if (entries.length === 0)
+                    break;
+                for (const entry of entries) {
+                    try {
+                        const data = JSON.parse(entry.response);
+                        if (!data.poster_path || seen.has(data.id))
+                            continue;
+                        const isMovie = entry.url.startsWith('3/movie/');
+                        const title = (isMovie ? data.title : data.name) || '';
+                        if (!title.toLowerCase().includes(searchQuery))
+                            continue;
+                        seen.add(data.id);
+                        allMatched.push({
+                            tmdbId: data.id, type: isMovie ? 'movie' : 'tv',
+                            title, posterPath: img('w500', data.poster_path),
+                            voteAverage: data.vote_average ?? 0,
+                            releaseDate: (isMovie ? data.release_date : data.first_air_date) || '',
+                        });
+                    }
+                    catch { /* skip */ }
+                }
+                offset += BATCH;
+            }
+            const total = allMatched.length;
+            const totalPages = Math.ceil(total / limit);
+            const items = allMatched.slice((page - 1) * limit, page * limit);
+            return { items, total, page, totalPages };
+        }
+        // No search: direct SQL pagination
+        const fetchLimit = limit * 3;
+        const dbOffset = (page - 1) * fetchLimit;
+        const entries = await prisma.$queryRawUnsafe(`SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY id DESC LIMIT ${fetchLimit} OFFSET ${dbOffset}`);
+        const items = [];
         for (const entry of entries) {
+            if (items.length >= limit)
+                break;
             try {
                 const data = JSON.parse(entry.response);
-                // Detail page: /movie/123 or /tv/123
-                if (/\/movie\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'movie')) {
-                    if (data.poster_path && !seen.has(data.id)) {
-                        seen.add(data.id);
-                        allItems.push({
-                            tmdbId: data.id, type: 'movie',
-                            title: data.title || 'Unknown',
-                            posterPath: img('w500', data.poster_path),
-                            voteAverage: data.vote_average ?? 0,
-                            releaseDate: data.release_date || '',
-                        });
-                    }
-                }
-                else if (/\/tv\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'tv')) {
-                    if (data.poster_path && !seen.has(data.id)) {
-                        seen.add(data.id);
-                        allItems.push({
-                            tmdbId: data.id, type: 'tv',
-                            title: data.name || 'Unknown',
-                            posterPath: img('w500', data.poster_path),
-                            voteAverage: data.vote_average ?? 0,
-                            releaseDate: data.first_air_date || '',
-                        });
-                    }
-                }
-                // List page: results[] array
-                else if (Array.isArray(data.results)) {
-                    const isMovieList = /\/movie\//.test(entry.url) || /\/trending\/movie\//.test(entry.url) || /\/discover\/movie/.test(entry.url);
-                    const isTvList = /\/tv\//.test(entry.url) || /\/trending\/tv\//.test(entry.url) || /\/discover\/tv/.test(entry.url);
-                    const wantType = isMovieList ? 'movie' : isTvList ? 'tv' : 'all';
-                    if (typeFilter !== 'all' && wantType !== 'all' && wantType !== typeFilter)
-                        continue;
-                    for (const item of data.results) {
-                        if (!item.poster_path || seen.has(item.id))
-                            continue;
-                        seen.add(item.id);
-                        const isMovie = wantType === 'movie' || (wantType === 'all' && (item.title || item.release_date));
-                        allItems.push({
-                            tmdbId: item.id, type: isMovie ? 'movie' : 'tv',
-                            title: (isMovie ? item.title : item.name) || 'Unknown',
-                            posterPath: img('w500', item.poster_path),
-                            voteAverage: item.vote_average ?? 0,
-                            releaseDate: (isMovie ? item.release_date : item.first_air_date) || '',
-                        });
-                    }
-                }
+                if (!data.poster_path || seen.has(data.id))
+                    continue;
+                seen.add(data.id);
+                const isMovie = entry.url.startsWith('3/movie/');
+                items.push({
+                    tmdbId: data.id, type: isMovie ? 'movie' : 'tv',
+                    title: (isMovie ? data.title : data.name) || 'Unknown',
+                    posterPath: img('w500', data.poster_path),
+                    voteAverage: data.vote_average ?? 0,
+                    releaseDate: (isMovie ? data.release_date : data.first_air_date) || '',
+                });
             }
-            catch { /* skip unparseable */ }
+            catch { /* skip */ }
         }
-        const filtered = searchQuery
-            ? allItems.filter(item => item.title.toLowerCase().includes(searchQuery))
-            : allItems;
-        const total = filtered.length;
+        const totalRow = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as cnt FROM TmdbCache WHERE ${where}`);
+        const total = Number(totalRow[0]?.cnt || 0);
         const totalPages = Math.ceil(total / limit);
-        const items = filtered.slice((page - 1) * limit, page * limit);
         return { items, total, page, totalPages };
     });
     // GET /admin/api/posters/detail/:tmdbId - Full detail for a cached movie/TV
@@ -177,125 +198,85 @@ export async function adminRoutes(fastify, opts) {
         const forceProxy = query.proxy === '1';
         const img = (size, p) => imgUrl(size, p, forceProxy);
         const id = parseInt(tmdbId);
-        // Try detail page first (URL contains the id)
-        const entries = await prisma.tmdbCache.findMany({
-            select: { url: true, response: true },
-            orderBy: { updatedAt: 'desc' },
-        });
-        let listMatch = null;
-        for (const entry of entries) {
-            try {
-                const data = JSON.parse(entry.response);
-                // Detail page match (top-level movie/TV object with credits, etc.)
-                if ((data.id === id) && (data.title || data.name) && data.poster_path && data.credits) {
-                    const isMovie = /\/movie\//.test(entry.url);
-                    return {
-                        type: isMovie ? 'movie' : 'tv',
-                        tmdbId: data.id,
-                        title: isMovie ? data.title : data.name,
-                        originalTitle: isMovie ? data.original_title : data.original_name,
-                        overview: data.overview || '',
-                        posterPath: img('w500', data.poster_path),
-                        backdropPath: img('w780', data.backdrop_path),
-                        voteAverage: data.vote_average ?? 0,
-                        voteCount: data.vote_count ?? 0,
-                        releaseDate: isMovie ? data.release_date : data.first_air_date,
-                        runtime: data.runtime || data.episode_run_time?.[0] || null,
-                        genres: data.genres || [],
-                        tagline: data.tagline || '',
-                        status: data.status || '',
-                        budget: data.budget || 0,
-                        revenue: data.revenue || 0,
-                        homepage: data.homepage || '',
-                        imdbId: data.imdb_id || '',
-                        originalLanguage: data.original_language || '',
-                        productionCompanies: (data.production_companies || []).slice(0, 5),
-                        // TV specific
-                        numberOfSeasons: data.number_of_seasons || null,
-                        numberOfEpisodes: data.number_of_episodes || null,
-                        seasons: (data.seasons || []).map((s) => ({
-                            ...s,
-                            posterPath: img('w154', s.poster_path),
-                        })),
-                        networks: data.networks || null,
-                        createdBy: data.created_by || null,
-                        // Cast (top 12)
-                        cast: (data.credits?.cast || []).slice(0, 12).map((c) => ({
-                            id: c.id, name: c.name, character: c.character,
-                            profilePath: img('w185', c.profile_path),
-                        })),
-                        // Backdrops (top 6)
-                        backdrops: (data.images?.backdrops || []).slice(0, 6).map((b) => img('w780', b.file_path)),
-                        // Logo (prefer zh > en > any)
-                        logoPath: (() => {
-                            const logos = data.images?.logos || [];
-                            const zh = logos.find((l) => l.iso_639_1 === 'zh');
-                            if (zh)
-                                return img('w500', zh.file_path);
-                            const en = logos.find((l) => l.iso_639_1 === 'en');
-                            if (en)
-                                return img('w500', en.file_path);
-                            return logos[0] ? img('w500', logos[0].file_path) : null;
-                        })(),
-                        // Videos (trailers, first 3)
-                        videos: (data.videos?.results || [])
-                            .filter((v) => v.site === 'YouTube')
-                            .slice(0, 3)
-                            .map((v) => ({ key: v.key, name: v.name, type: v.type })),
-                        // Recommendations (top 8)
-                        recommendations: (data.recommendations?.results || []).slice(0, 8).map((r) => ({
-                            tmdbId: r.id, title: r.title || r.name,
-                            posterPath: img('w300', r.poster_path),
-                        })),
-                        // Watch providers
-                        watchProviders: data['watch/providers']?.results || null,
-                    };
-                }
-            }
-            catch { /* skip */ }
+        // Helper to build detail response from cache entry
+        function buildDetail(entry) {
+            const data = JSON.parse(entry.response);
+            if (!((data.id === id) && (data.title || data.name) && data.poster_path && data.credits))
+                return null;
+            const isMovie = /\/movie\//.test(entry.url);
+            return {
+                type: isMovie ? 'movie' : 'tv',
+                tmdbId: data.id,
+                title: isMovie ? data.title : data.name,
+                originalTitle: isMovie ? data.original_title : data.original_name,
+                overview: data.overview || '',
+                posterPath: img('w500', data.poster_path),
+                backdropPath: img('w780', data.backdrop_path),
+                voteAverage: data.vote_average ?? 0,
+                voteCount: data.vote_count ?? 0,
+                releaseDate: isMovie ? data.release_date : data.first_air_date,
+                runtime: data.runtime || data.episode_run_time?.[0] || null,
+                genres: data.genres || [],
+                tagline: data.tagline || '',
+                status: data.status || '',
+                budget: data.budget || 0,
+                revenue: data.revenue || 0,
+                homepage: data.homepage || '',
+                imdbId: data.imdb_id || '',
+                originalLanguage: data.original_language || '',
+                productionCompanies: (data.production_companies || []).slice(0, 5),
+                numberOfSeasons: data.number_of_seasons || null,
+                numberOfEpisodes: data.number_of_episodes || null,
+                seasons: (data.seasons || []).map((s) => ({ ...s, posterPath: img('w154', s.poster_path) })),
+                networks: data.networks || null,
+                createdBy: data.created_by || null,
+                cast: (data.credits?.cast || []).slice(0, 12).map((c) => ({
+                    id: c.id, name: c.name, character: c.character,
+                    profilePath: img('w185', c.profile_path),
+                })),
+                backdrops: (data.images?.backdrops || []).slice(0, 6).map((b) => img('w780', b.file_path)),
+                logoPath: (() => {
+                    const logos = data.images?.logos || [];
+                    const zh = logos.find((l) => l.iso_639_1 === 'zh');
+                    if (zh)
+                        return img('w500', zh.file_path);
+                    const en = logos.find((l) => l.iso_639_1 === 'en');
+                    if (en)
+                        return img('w500', en.file_path);
+                    return logos[0] ? img('w500', logos[0].file_path) : null;
+                })(),
+                videos: (data.videos?.results || []).filter((v) => v.site === 'YouTube').slice(0, 3).map((v) => ({ key: v.key, name: v.name, type: v.type })),
+                recommendations: (data.recommendations?.results || []).slice(0, 8).map((r) => ({
+                    tmdbId: r.id, title: r.title || r.name,
+                    posterPath: img('w300', r.poster_path),
+                })),
+                watchProviders: data['watch/providers']?.results || null,
+            };
         }
-        // Save partial match from list pages (don't return yet — try TMDB fallback first)
-        let partialResult = null;
-        for (const entry of entries) {
-            try {
-                const data = JSON.parse(entry.response);
-                if (!Array.isArray(data.results))
-                    continue;
-                const found = data.results.find((r) => r.id === id);
-                if (found && found.poster_path) {
-                    const isMovie = !!(found.title || found.release_date);
-                    partialResult = {
-                        type: isMovie ? 'movie' : 'tv',
-                        tmdbId: found.id,
-                        title: isMovie ? found.title : found.name,
-                        originalTitle: isMovie ? found.original_title : found.original_name,
-                        overview: found.overview || '',
-                        posterPath: img('w500', found.poster_path),
-                        backdropPath: img('w780', found.backdrop_path),
-                        voteAverage: found.vote_average ?? 0,
-                        voteCount: found.vote_count ?? 0,
-                        releaseDate: isMovie ? found.release_date : found.first_air_date,
-                        runtime: null, genres: [], tagline: '', status: '',
-                        budget: 0, revenue: 0, homepage: '', imdbId: '',
-                        originalLanguage: found.original_language || '',
-                        productionCompanies: [],
-                        numberOfSeasons: null, numberOfEpisodes: null,
-                        seasons: null, networks: null, createdBy: null,
-                        cast: [], backdrops: [], logoPath: null, videos: [], recommendations: [],
-                        watchProviders: null,
-                        _partial: true,
-                    };
-                    break;
+        // 1. Try exact URL match first (movie then TV)
+        for (const type of ['movie', 'tv']) {
+            const entry = await prisma.tmdbCache.findFirst({
+                where: { OR: [
+                        { url: `3/${type}/${id}` },
+                        { url: { startsWith: `3/${type}/${id}?` } },
+                    ] },
+                select: { url: true, response: true },
+                orderBy: { updatedAt: 'desc' },
+            });
+            if (entry) {
+                try {
+                    const result = buildDetail(entry);
+                    if (result)
+                        return result;
                 }
+                catch { /* skip */ }
             }
-            catch { /* skip */ }
         }
-        // Full detail not in cache — fetch from TMDB (auto-caches), then retry
+        // 2. TMDB fallback — fetch from TMDB (auto-caches), then retry
         try {
             const { handleTmdbRequest } = await import('./proxy.js');
             const apiKey = config.tmdb.apiKey;
             const lang = config.tmdb.language;
-            // Try movie first, then TV
             let fetched = false;
             try {
                 await handleTmdbRequest(`3/movie/${id}?api_key=${apiKey}&language=${lang}`, true);
@@ -310,74 +291,27 @@ export async function adminRoutes(fastify, opts) {
                 catch { }
             }
             if (fetched) {
-                // Retry cache lookup (same logic as above)
-                const retryEntries = await prisma.tmdbCache.findMany({
-                    select: { url: true, response: true },
-                    orderBy: { updatedAt: 'desc' },
-                });
-                for (const entry of retryEntries) {
-                    try {
-                        const data = JSON.parse(entry.response);
-                        if ((data.id === id) && (data.title || data.name) && data.poster_path && data.credits) {
-                            const isMovie = /\/movie\//.test(entry.url);
-                            return {
-                                type: isMovie ? 'movie' : 'tv',
-                                tmdbId: data.id,
-                                title: isMovie ? data.title : data.name,
-                                originalTitle: isMovie ? data.original_title : data.original_name,
-                                overview: data.overview || '',
-                                posterPath: img('w500', data.poster_path),
-                                backdropPath: img('w780', data.backdrop_path),
-                                voteAverage: data.vote_average ?? 0,
-                                voteCount: data.vote_count ?? 0,
-                                releaseDate: isMovie ? data.release_date : data.first_air_date,
-                                runtime: data.runtime || data.episode_run_time?.[0] || null,
-                                genres: data.genres || [],
-                                tagline: data.tagline || '',
-                                status: data.status || '',
-                                budget: data.budget || 0,
-                                revenue: data.revenue || 0,
-                                homepage: data.homepage || '',
-                                imdbId: data.imdb_id || '',
-                                originalLanguage: data.original_language || '',
-                                productionCompanies: (data.production_companies || []).slice(0, 5),
-                                numberOfSeasons: data.number_of_seasons || null,
-                                numberOfEpisodes: data.number_of_episodes || null,
-                                seasons: (data.seasons || []).map((s) => ({ ...s, posterPath: img('w154', s.poster_path) })),
-                                networks: data.networks || null,
-                                createdBy: data.created_by || null,
-                                cast: (data.credits?.cast || []).slice(0, 12).map((c) => ({
-                                    id: c.id, name: c.name, character: c.character,
-                                    profilePath: img('w185', c.profile_path),
-                                })),
-                                backdrops: (data.images?.backdrops || []).slice(0, 6).map((b) => img('w780', b.file_path)),
-                                logoPath: (() => {
-                                    const logos = data.images?.logos || [];
-                                    const zh = logos.find((l) => l.iso_639_1 === 'zh');
-                                    if (zh)
-                                        return img('w500', zh.file_path);
-                                    const en = logos.find((l) => l.iso_639_1 === 'en');
-                                    if (en)
-                                        return img('w500', en.file_path);
-                                    return logos[0] ? img('w500', logos[0].file_path) : null;
-                                })(),
-                                videos: (data.videos?.results || []).filter((v) => v.site === 'YouTube').slice(0, 3).map((v) => ({ key: v.key, name: v.name, type: v.type })),
-                                recommendations: (data.recommendations?.results || []).slice(0, 8).map((r) => ({
-                                    tmdbId: r.id, title: r.title || r.name,
-                                    posterPath: img('w300', r.poster_path),
-                                })),
-                                watchProviders: data['watch/providers']?.results || null,
-                            };
+                for (const type of ['movie', 'tv']) {
+                    const entry = await prisma.tmdbCache.findFirst({
+                        where: { OR: [
+                                { url: `3/${type}/${id}` },
+                                { url: { startsWith: `3/${type}/${id}?` } },
+                            ] },
+                        select: { url: true, response: true },
+                        orderBy: { updatedAt: 'desc' },
+                    });
+                    if (entry) {
+                        try {
+                            const result = buildDetail(entry);
+                            if (result)
+                                return result;
                         }
+                        catch { /* skip */ }
                     }
-                    catch { /* skip */ }
                 }
             }
         }
         catch { }
-        // Return partial result if available
-        if (partialResult)
-            return partialResult;
         reply.code(404).send({ error: 'Not found in cache' });
     });
     // GET /admin/api/tmdb/search - Search TMDB directly
@@ -418,6 +352,61 @@ export async function adminRoutes(fastify, opts) {
         }
         catch (e) {
             reply.code(500).send({ error: e.message || 'TMDB search failed' });
+        }
+    });
+    // GET /admin/api/tmdb/discover - Discover by genre
+    fastify.get('/admin/api/tmdb/discover', async (request, reply) => {
+        const query = request.query;
+        const type = query.type === 'tv' ? 'tv' : 'movie';
+        const genre = query.genre;
+        const page = Math.max(1, parseInt(query.page || '1'));
+        if (!genre)
+            return { results: [] };
+        const apiKey = config.tmdb.apiKey;
+        const lang = config.tmdb.language;
+        const forceProxy = true;
+        try {
+            const { handleTmdbRequest } = await import('./proxy.js');
+            const urlPath = `3/discover/${type}?api_key=${apiKey}&language=${lang}&with_genres=${genre}&sort_by=popularity.desc&page=${page}`;
+            const data = await handleTmdbRequest(urlPath, true);
+            const results = (data.results || []).filter((item) => item.poster_path).map((item) => ({
+                tmdbId: item.id,
+                title: type === 'movie' ? item.title : item.name,
+                posterPath: imgUrl('w300', item.poster_path, forceProxy),
+                voteAverage: item.vote_average ?? 0,
+                releaseDate: (type === 'movie' ? item.release_date : item.first_air_date) || '',
+            }));
+            return { results, page, totalPages: data.total_pages || 1 };
+        }
+        catch (e) {
+            reply.code(500).send({ error: e.message || 'Discover failed' });
+        }
+    });
+    // GET /admin/api/tmdb/person/:id - Person detail with credits
+    fastify.get('/admin/api/tmdb/person/:id', async (request, reply) => {
+        const { id } = request.params;
+        const query = request.query;
+        const forceProxy = query.proxy === '1';
+        const img = (size, p) => imgUrl(size, p, forceProxy);
+        try {
+            const { handleTmdbRequest } = await import('./proxy.js');
+            const apiKey = config.tmdb.apiKey;
+            const lang = config.tmdb.language;
+            const urlPath = `3/person/${id}?api_key=${apiKey}&language=${lang}&append_to_response=combined_credits,images,external_ids`;
+            const data = await handleTmdbRequest(urlPath, true);
+            return {
+                id: data.id,
+                name: data.name,
+                biography: data.biography || '',
+                birthday: data.birthday || null,
+                place_of_birth: data.place_of_birth || null,
+                known_for_department: data.known_for_department || '',
+                profile_path: img('w185', data.profile_path),
+                combined_credits: data.combined_credits || { cast: [] },
+            };
+        }
+        catch (e) {
+            reply.code(500).send({ error: e.message || 'Failed to fetch person' });
         }
     });
     // GET /admin/api/posters/season/:tvId/:seasonNumber - Season detail
@@ -517,6 +506,10 @@ export async function adminRoutes(fastify, opts) {
             warmer.start();
         return { success: true, running: true };
     });
+    // GET /admin/api/dns/test - Test DNS connectivity
+    fastify.get('/admin/api/dns/test', async () => {
+        return await testDnsConnectivity();
+    });
     // GET /admin/api/config - Current config (masked)
     fastify.get('/admin/api/config', async () => {
         return {
@@ -526,6 +519,7 @@ export async function adminRoutes(fastify, opts) {
                 httpProxy: config.tmdb.httpProxy || '',
                 authKey: config.tmdb.authKey ? '***' : '',
                 proxyImages: config.tmdb.proxyImages,
+                resolveTmdbDns: config.tmdb.resolveTmdbDns,
             },
             server: {
                 port: config.server.port,
@@ -541,6 +535,7 @@ export async function adminRoutes(fastify, opts) {
                 httpProxy: config.tmdb.httpProxy || '',
                 authKey: config.tmdb.authKey || '',
                 proxyImages: config.tmdb.proxyImages,
+                resolveTmdbDns: config.tmdb.resolveTmdbDns,
             },
             server: {
                 port: config.server.port,
@@ -558,6 +553,7 @@ export async function adminRoutes(fastify, opts) {
                 httpProxy: body?.tmdb?.httpProxy !== undefined ? body.tmdb.httpProxy : config.tmdb.httpProxy,
                 authKey: body?.tmdb?.authKey !== undefined ? body.tmdb.authKey : config.tmdb.authKey,
                 proxyImages: body?.tmdb?.proxyImages !== undefined ? body.tmdb.proxyImages : config.tmdb.proxyImages,
+                resolveTmdbDns: body?.tmdb?.resolveTmdbDns !== undefined ? body.tmdb.resolveTmdbDns : config.tmdb.resolveTmdbDns,
             },
             server: {
                 port: body?.server?.port || config.server.port,
@@ -584,7 +580,7 @@ export async function adminRoutes(fastify, opts) {
             fs.renameSync(tmpPath, configPath);
             // Apply API key and language changes in-memory (port requires restart)
             const portChanged = newConfig.server.port !== config.server.port;
-            updateConfig({ tmdb: { apiKey: newConfig.tmdb.apiKey, language: newConfig.tmdb.language, httpProxy: newConfig.tmdb.httpProxy, authKey: newConfig.tmdb.authKey, proxyImages: newConfig.tmdb.proxyImages } });
+            updateConfig({ tmdb: { apiKey: newConfig.tmdb.apiKey, language: newConfig.tmdb.language, httpProxy: newConfig.tmdb.httpProxy, authKey: newConfig.tmdb.authKey, proxyImages: newConfig.tmdb.proxyImages, resolveTmdbDns: newConfig.tmdb.resolveTmdbDns } });
             return { success: true, message: portChanged ? '已保存，端口变更需重启服务生效' : '配置已即时生效' };
         }
         catch (e) {
@@ -606,8 +602,8 @@ export async function adminRoutes(fastify, opts) {
             prisma.apiLog.count({ where: { hit: true } }),
             prisma.apiLog.count({ where: { source: 'external' } }),
             prisma.apiLog.groupBy({
-                by: ['title'],
-                where: { title: { not: null } },
+                by: ['title', 'url'],
+                where: { title: { not: null }, type: { in: ['movie', 'tv', 'person'] } },
                 _count: { title: true },
                 orderBy: { _count: { title: 'desc' } },
                 take: 10,
@@ -618,7 +614,15 @@ export async function adminRoutes(fastify, opts) {
             today: todayCount,
             hitRate: total > 0 ? Math.round((hitCount / total) * 100) : 0,
             external: externalCount,
-            topItems: topItems.map(item => ({ title: item.title, count: item._count.title })),
+            topItems: topItems.map(item => {
+                const match = item.url.match(/\/(movie|tv|person)\/(\d+)/);
+                return {
+                    title: item.title,
+                    count: item._count.title,
+                    type: match ? match[1] : null,
+                    tmdbId: match && match[2] ? parseInt(match[2]) : null,
+                };
+            }),
         };
     });
     // GET /admin/api/logs - List logs with pagination

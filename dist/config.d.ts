@@ -6,6 +6,7 @@ interface AppConfig {
         httpProxy: string;
         authKey: string;
         proxyImages: boolean;
+        resolveTmdbDns: boolean;
     };
     server: {
         port: number;
@@ -20,6 +21,7 @@ export declare function updateConfig(partial: {
         httpProxy?: string;
         authKey?: string;
         proxyImages?: boolean;
+        resolveTmdbDns?: boolean;
     };
     logRetentionDays?: number;
 }): void;

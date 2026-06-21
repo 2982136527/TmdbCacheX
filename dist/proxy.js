@@ -1,10 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { config } from './config.js';
+import { getDnsAgent } from './dns-resolver.js';
 export const prisma = new PrismaClient();
 const TMDB_BASE_URL = 'https://api.themoviedb.org';
 const CACHE_TTL_MS = 7 * 24 * 3600 * 1000; // 7 days
-function getProxyConfig() {
+export function getProxyConfig() {
     const p = config.tmdb.httpProxy;
     if (!p)
         return {};
@@ -124,11 +125,13 @@ export async function handleTmdbRequest(urlPath, isBackground = false) {
         }
     }
     try {
+        const dnsConfig = config.tmdb.resolveTmdbDns ? { httpsAgent: getDnsAgent() } : {};
         const response = await axios.get(upstreamUrl, {
             headers: {
                 'User-Agent': 'TmdbCacheX/1.0'
             },
             ...getProxyConfig(),
+            ...dnsConfig,
         });
         const data = response.data;
         // 3. Save to Cache (cache stringify result to avoid double work)

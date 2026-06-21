@@ -8,7 +8,7 @@ export const prisma = new PrismaClient();
 const TMDB_BASE_URL = 'https://api.themoviedb.org';
 const CACHE_TTL_MS = 7 * 24 * 3600 * 1000; // 7 days
 
-function getProxyConfig(): { proxy?: { host: string; port: number; protocol: string } } {
+export function getProxyConfig(): { proxy?: { host: string; port: number; protocol: string } } {
     const p = config.tmdb.httpProxy;
     if (!p) return {};
     try {
