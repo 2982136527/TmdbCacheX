@@ -81,7 +81,7 @@ async function proxyImage(imgPath: string, reply: any) {
         const { default: axios } = await import('axios');
         const proxyCfg = getProxyConfig();
         const dnsConfig = config.tmdb.resolveTmdbDns ? { httpsAgent: getDnsAgent() } : {};
-        const maxRetries = 9;
+        const maxRetries = 99;
         let lastError: any;
         let response: any;
 
@@ -103,7 +103,7 @@ async function proxyImage(imgPath: string, reply: any) {
                     || err.message?.includes('TLS') || err.message?.includes('socket');
 
                 if (attempt < maxRetries && isRetryable) {
-                    const delay = (attempt + 1) * 1500;
+                    const delay = Math.min((attempt + 1) * 1500, 30000);
                     await new Promise(r => setTimeout(r, delay));
                 } else {
                     throw lastError;

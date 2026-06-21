@@ -102,7 +102,7 @@ export class CacheWarmer {
                     console.log(`[HOT-LOOP] Scanning page ${page} of ${task.path}...`);
                     await handleTmdbRequest(url, true);
                     this.saveHotLoopCheckpoint(ti, page);
-                    await new Promise(r => setTimeout(r, 3000 + Math.random() * 2000));
+                    await new Promise(r => setTimeout(r, 1500));
                 } catch (e: any) {
                     console.error(`[HOT-LOOP] Failed page ${page}: ${e.message}`);
                 }
@@ -252,7 +252,7 @@ export class CacheWarmer {
                     break;
                 }
 
-                await new Promise(r => setTimeout(r, 2500 + Math.random() * 2000));
+                await new Promise(r => setTimeout(r, 1000));
             } catch (e: any) {
                 console.error(`[WARMER] Failed ${endpoint} page ${page}: ${e.message}`);
 

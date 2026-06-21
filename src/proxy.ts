@@ -139,7 +139,7 @@ export async function handleTmdbRequest(urlPath: string, isBackground = false): 
 
     try {
         const dnsConfig = config.tmdb.resolveTmdbDns ? { httpsAgent: getDnsAgent() } : {};
-        const maxRetries = 9;
+        const maxRetries = 99;
         let lastError: any;
         let response: any;
 
@@ -163,7 +163,7 @@ export async function handleTmdbRequest(urlPath: string, isBackground = false): 
                     || err.message?.includes('TLS') || err.message?.includes('socket');
 
                 if (attempt < maxRetries && isRetryable) {
-                    const delay = (attempt + 1) * 2000;
+                    const delay = Math.min((attempt + 1) * 2000, 30000);
                     console.warn(`[PROXY] Retry ${attempt + 1}/${maxRetries} after ${delay}ms: ${err.message}`);
                     await new Promise(r => setTimeout(r, delay));
                 } else {
