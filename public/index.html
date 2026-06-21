@@ -1145,7 +1145,7 @@
                 } else {
                     grid.innerHTML = data.items.map(item => `
                         <div class="poster-card" onclick="openDetail(${item.tmdbId})">
-                            <img src="${item.posterPath}" alt="${item.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                            <img src="${item.posterPath}" alt="${item.title}" loading="lazy" ${phImg('poster')}>
                             <span class="poster-badge ${item.type === 'movie' ? 'poster-badge-movie' : 'poster-badge-tv'}">${item.type === 'movie' ? '电影' : '剧集'}</span>
                             <span class="poster-rating">&#9733; ${item.voteAverage.toFixed(1)}</span>
                             <div class="poster-overlay">
@@ -1190,7 +1190,7 @@
 
                 grid.innerHTML = data.results.map(item => `
                     <div class="poster-card" onclick="openDetail(${item.tmdbId})">
-                        <img src="${item.posterPath}" alt="${item.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                        <img src="${item.posterPath}" alt="${item.title}" loading="lazy" ${phImg('poster')}>
                         ${item.type !== 'person' ? `
                         <span class="poster-badge ${item.type === 'movie' ? 'poster-badge-movie' : 'poster-badge-tv'}">${item.type === 'movie' ? '电影' : '剧集'}</span>
                         <span class="poster-rating">&#9733; ${(item.voteAverage || 0).toFixed(1)}</span>
@@ -1235,9 +1235,9 @@
                     ${d._partial ? '<div class="mx-6 mt-4 px-4 py-2.5 rounded-xl text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20">仅缓存了基本信息（来自列表页），详细数据尚未缓存。Warmer 会在后续自动抓取完整详情。</div>' : ''}
                     <!-- Hero -->
                     <div class="modal-hero">
-                        ${d.backdropPath ? `<img src="${d.backdropPath}" alt="">` : ''}
+                        ${d.backdropPath ? `<img src="${d.backdropPath}" ${phImg('backdrop')} alt="">` : ''}
                         <div class="modal-hero-gradient"></div>
-                        ${d.posterPath ? `<div class="modal-poster-float"><img src="${d.posterPath}" alt=""></div>` : ''}
+                        ${d.posterPath ? `<div class="modal-poster-float"><img src="${d.posterPath}" ${phImg('poster')} alt=""></div>` : ''}
                         ${d.logoPath ? `<div class="detail-logo absolute bottom-8 left-[170px] z-10 flex items-end"><img src="${d.logoPath}" class="max-w-[200px] max-h-[50px] object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]" alt=""></div>` : ''}
                     </div>
 
@@ -1283,7 +1283,7 @@
                         <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-2">季度</h3>
                         <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2" id="seasonList">${d.seasons.filter(s => s.season_number > 0).map(s => `
                             <div class="flex-shrink-0 glass rounded-xl p-3 w-28 text-center cursor-pointer hover:bg-white/[0.08] transition-all season-card" onclick="loadSeason(${d.tmdbId}, ${s.season_number})" data-season="${s.season_number}">
-                                ${s.posterPath ? `<img src="${s.posterPath}" class="w-full rounded-lg mb-2" alt="">` : '<div class="w-full aspect-[2/3] rounded-lg bg-white/5 mb-2"></div>'}
+                                ${s.posterPath ? `<img src="${s.posterPath}" class="w-full rounded-lg mb-2" ${phImg('poster')} alt="">` : '<div class="w-full aspect-[2/3] rounded-lg bg-white/5 mb-2"></div>'}
                                 <div class="text-xs font-medium text-slate-300 truncate">${s.name}</div>
                                 <div class="text-[10px] text-slate-500">${s.episode_count} 集</div>
                             </div>`).join('')}</div>
@@ -1295,7 +1295,7 @@
                         <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">演员</h3>
                         <div class="flex gap-4 overflow-x-auto scrollbar-thin pb-2">${d.cast.map(c => `
                             <div class="cast-card cursor-pointer hover:bg-white/[0.08] transition-all" onclick="openPersonDetail(${c.id})">
-                                ${c.profilePath ? `<img src="${c.profilePath}" alt="${c.name}">` : '<div class="w-16 h-16 rounded-full bg-white/5 mx-auto mb-1.5"></div>'}
+                                ${c.profilePath ? `<img src="${c.profilePath}" ${phImg('profile')} alt="${c.name}">` : '<div class="w-16 h-16 rounded-full bg-white/5 mx-auto mb-1.5"></div>'}
                                 <div class="text-[11px] text-slate-300 truncate">${c.name}</div>
                                 <div class="text-[10px] text-slate-500 truncate">${c.character}</div>
                             </div>`).join('')}</div></div>` : ''}
@@ -1304,7 +1304,7 @@
                         ${d.backdrops?.length ? `
                         <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">剧照</h3>
                         <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2">${d.backdrops.map(b => `
-                            <div class="backdrop-thumb"><img src="${b}" alt="" loading="lazy"></div>`).join('')}</div></div>` : ''}
+                            <div class="backdrop-thumb"><img src="${b}" ${phImg('backdrop')} alt="" loading="lazy"></div>`).join('')}</div></div>` : ''}
 
                         <!-- Videos -->
                         ${d.videos?.length ? `
@@ -1320,7 +1320,7 @@
                         <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">推荐</h3>
                         <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2">${d.recommendations.map(r => `
                             <div class="flex-shrink-0 w-20 cursor-pointer" onclick="openDetail(${r.tmdbId})">
-                                ${r.posterPath ? `<img src="${r.posterPath}" class="w-full rounded-lg mb-1 object-cover" style="aspect-ratio:2/3" alt="">` : '<div class="w-full rounded-lg bg-white/5 mb-1" style="aspect-ratio:2/3"></div>'}
+                                ${r.posterPath ? `<img src="${r.posterPath}" class="w-full rounded-lg mb-1 object-cover" style="aspect-ratio:2/3" ${phImg('poster')} alt="">` : '<div class="w-full rounded-lg bg-white/5 mb-1" style="aspect-ratio:2/3"></div>'}
                                 <div class="text-[10px] text-slate-400 truncate">${r.title}</div>
                             </div>`).join('')}</div></div>` : ''}
 
@@ -1356,7 +1356,7 @@
                         ${data.overview ? `<p class="text-xs text-slate-400 mb-4 leading-relaxed">${data.overview}</p>` : ''}
                         <div class="max-h-[420px] overflow-y-auto pr-1 space-y-0 scrollbar-thin">${data.episodes.map(ep => `
                             <div class="episode-row">
-                                ${ep.stillPath ? `<div class="flex-shrink-0 w-24 rounded-lg overflow-hidden"><img src="${ep.stillPath}" class="w-full" alt="" loading="lazy"></div>` : '<div class="flex-shrink-0 w-24 h-14 rounded-lg bg-white/5"></div>'}
+                                ${ep.stillPath ? `<div class="flex-shrink-0 w-24 rounded-lg overflow-hidden"><img src="${ep.stillPath}" class="w-full" ${phImg('backdrop')} alt="" loading="lazy"></div>` : '<div class="flex-shrink-0 w-24 h-14 rounded-lg bg-white/5"></div>'}
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center gap-2 mb-0.5">
                                         <span class="text-[10px] text-slate-500 font-mono">E${String(ep.episodeNumber).padStart(2,'0')}</span>
@@ -1473,7 +1473,7 @@
                 content.innerHTML = `
                     <div class="p-6">
                         <div class="flex items-start gap-5 mb-6">
-                            ${data.profile_path ? `<img src="${data.profile_path}" class="w-24 rounded-xl object-cover" style="aspect-ratio:2/3" alt="">` : ''}
+                            ${data.profile_path ? `<img src="${data.profile_path}" class="w-24 rounded-xl object-cover" style="aspect-ratio:2/3" ${phImg('poster')} alt="">` : ''}
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-3 mb-2">
                                     <button onclick="closeModal()" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">返回</button>
@@ -1493,7 +1493,7 @@
                             const isMovie = !!(item.title || item.release_date);
                             return `
                             <div class="cursor-pointer group" onclick="closeModal(); setTimeout(() => openDetail(${item.id}), 100)">
-                                <img src="${imgUrl('w300', item.poster_path, true)}" class="w-full rounded-lg mb-1 object-cover group-hover:ring-2 ring-pink-500/50 transition-all" style="aspect-ratio:2/3" alt="" loading="lazy">
+                                <img src="${imgUrl('w300', item.poster_path, true)}" class="w-full rounded-lg mb-1 object-cover group-hover:ring-2 ring-pink-500/50 transition-all" style="aspect-ratio:2/3" ${phImg('poster')} alt="" loading="lazy">
                                 <div class="text-[10px] text-slate-400 truncate">${isMovie ? item.title : item.name}</div>
                                 ${item.vote_average ? `<div class="text-[10px] text-amber-400">&#9733; ${item.vote_average.toFixed(1)}</div>` : ''}
                             </div>`;
@@ -1510,6 +1510,12 @@
             if (forceProxy) return '/img/' + size + path;
             return 'https://image.tmdb.org/t/p/' + size + path;
         }
+
+        // Placeholder SVGs for failed images (different aspect ratios)
+        const PH_POSTER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 450'%3E%3Crect fill='%231e293b' width='300' height='450'/%3E%3Ctext x='150' y='225' fill='%23475569' font-size='13' text-anchor='middle'%3E加载失败%3C/text%3E%3C/svg%3E";
+        const PH_BACKDROP = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect fill='%231e293b' width='320' height='180'/%3E%3Ctext x='160' y='90' fill='%23475569' font-size='13' text-anchor='middle' dominant-baseline='middle'%3E加载失败%3C/text%3E%3C/svg%3E";
+        const PH_PROFILE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect fill='%231e293b' width='200' height='200' rx='100'/%3E%3Ctext x='100' y='100' fill='%23475569' font-size='13' text-anchor='middle' dominant-baseline='middle'%3E加载失败%3C/text%3E%3C/svg%3E";
+        function phImg(type) { return `onerror="this.onerror=null; this.src='${type === 'backdrop' ? PH_BACKDROP : type === 'profile' ? PH_PROFILE : PH_POSTER}'"`; }
 
         function closeModal() {
             document.getElementById('detailModal').classList.remove('active');

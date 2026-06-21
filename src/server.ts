@@ -15,11 +15,28 @@ function parseApiType(url: string): string {
     return 'other';
 }
 
+// Custom logger that suppresses admin/static/image proxy request logs
+const isNoisyUrl = (url: string) =>
+    url.startsWith('/admin/api') || url.startsWith('/img/') || url.startsWith('/t/p/') || url === '/';
+
 const fastify = Fastify({
-    logger: true
+    logger: true,
+    disableRequestLogging: true,
 });
 
 const PORT = config.server.port;
+
+// Selective request logging: skip admin/static/image routes
+fastify.addHook('onRequest', async (request) => {
+    if (!isNoisyUrl(request.url)) {
+        request.log.info({ req: request }, 'incoming request');
+    }
+});
+fastify.addHook('onResponse', async (request, reply) => {
+    if (!isNoisyUrl(request.url)) {
+        request.log.info({ res: reply, responseTime: (reply as any).elapsedTime }, 'request completed');
+    }
+});
 
 // Serve admin page at /
 fastify.get('/', async (request, reply) => {
@@ -37,27 +54,78 @@ fastify.register(adminRoutes, { getWarmer: () => warmerInstance });
 // Allowed TMDB API path patterns
 const ALLOWED_PATHS = /^\/3\/(movie|tv|search|discover|trending|genre|configuration|find|person|collection|network|company|keyword|review|account|authentication|certification|changes|lists)(\/|$)/;
 
+// In-memory image cache (LRU-ish, max 500 entries, 7 day TTL)
+const imageCache = new Map<string, { data: Buffer; contentType: string; cachedAt: number }>();
+const IMAGE_CACHE_TTL = 7 * 24 * 3600 * 1000;
+const IMAGE_CACHE_MAX = 500;
+
 // Shared image proxy handler (supports both /img/* and /t/p/* for TMDB image compatibility)
 async function proxyImage(imgPath: string, reply: any) {
     if (!imgPath || !imgPath.startsWith('/')) {
         reply.code(400).send({ error: 'Invalid image path' });
         return;
     }
+
+    // Check in-memory cache
+    const cached = imageCache.get(imgPath);
+    if (cached && Date.now() - cached.cachedAt < IMAGE_CACHE_TTL) {
+        reply
+            .header('Content-Type', cached.contentType)
+            .header('Cache-Control', 'public, max-age=604800')
+            .header('X-Cache', 'HIT')
+            .send(cached.data);
+        return;
+    }
+
     try {
         const { default: axios } = await import('axios');
         const proxyCfg = getProxyConfig();
         const dnsConfig = config.tmdb.resolveTmdbDns ? { httpsAgent: getDnsAgent() } : {};
-        const response = await axios.get(`https://image.tmdb.org/t/p${imgPath}`, {
-            responseType: 'arraybuffer',
-            timeout: 15000,
-            headers: { 'User-Agent': 'TmdbCacheX/1.0' },
-            ...proxyCfg,
-            ...dnsConfig,
-        });
+        const maxRetries = 9;
+        let lastError: any;
+        let response: any;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                response = await axios.get(`https://image.tmdb.org/t/p${imgPath}`, {
+                    responseType: 'arraybuffer',
+                    timeout: 15000,
+                    headers: { 'User-Agent': 'TmdbCacheX/1.0' },
+                    ...proxyCfg,
+                    ...dnsConfig,
+                });
+                break;
+            } catch (err: any) {
+                lastError = err;
+                const code = err.code || '';
+                const isRetryable = !err.response?.status || err.response.status >= 500
+                    || code === 'ECONNRESET' || code === 'ECONNABORTED'
+                    || err.message?.includes('TLS') || err.message?.includes('socket');
+
+                if (attempt < maxRetries && isRetryable) {
+                    const delay = (attempt + 1) * 1500;
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    throw lastError;
+                }
+            }
+        }
+
+        const contentType = response.headers['content-type'] || 'image/jpeg';
+        const data = Buffer.from(response.data);
+
+        // Store in cache (evict oldest if full)
+        if (imageCache.size >= IMAGE_CACHE_MAX) {
+            const firstKey = imageCache.keys().next().value;
+            if (firstKey) imageCache.delete(firstKey);
+        }
+        imageCache.set(imgPath, { data, contentType, cachedAt: Date.now() });
+
         reply
-            .header('Content-Type', response.headers['content-type'] || 'image/jpeg')
-            .header('Cache-Control', 'public, max-age=604800') // 7 days
-            .send(response.data);
+            .header('Content-Type', contentType)
+            .header('Cache-Control', 'public, max-age=604800')
+            .header('X-Cache', 'MISS')
+            .send(data);
     } catch (e: any) {
         reply.code(e.response?.status || 502).send({ error: 'Image fetch failed' });
     }

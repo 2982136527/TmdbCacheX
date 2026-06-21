@@ -139,13 +139,38 @@ export async function handleTmdbRequest(urlPath: string, isBackground = false): 
 
     try {
         const dnsConfig = config.tmdb.resolveTmdbDns ? { httpsAgent: getDnsAgent() } : {};
-        const response = await axios.get(upstreamUrl, {
-            headers: {
-                'User-Agent': 'TmdbCacheX/1.0'
-            },
-            ...getProxyConfig(),
-            ...dnsConfig,
-        });
+        const maxRetries = 9;
+        let lastError: any;
+        let response: any;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                response = await axios.get(upstreamUrl, {
+                    headers: {
+                        'User-Agent': 'TmdbCacheX/1.0'
+                    },
+                    timeout: 15000,
+                    ...getProxyConfig(),
+                    ...dnsConfig,
+                });
+                break;
+            } catch (err: any) {
+                lastError = err;
+                const status = err.response?.status;
+                const code = err.code || '';
+                const isRetryable = !status || status === 429 || status >= 500
+                    || code === 'ECONNRESET' || code === 'ECONNABORTED'
+                    || err.message?.includes('TLS') || err.message?.includes('socket');
+
+                if (attempt < maxRetries && isRetryable) {
+                    const delay = (attempt + 1) * 2000;
+                    console.warn(`[PROXY] Retry ${attempt + 1}/${maxRetries} after ${delay}ms: ${err.message}`);
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    throw lastError;
+                }
+            }
+        }
         const data = response.data;
 
         // 3. Save to Cache (cache stringify result to avoid double work)
