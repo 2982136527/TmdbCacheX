@@ -14,28 +14,43 @@ function imgUrl(size: string, imgPath: string | null, forceProxy = false): strin
 }
 
 export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: () => any }) {
-    // GET /admin/api/stats - Cache statistics
+    // Stats cache (30s TTL)
+    let statsCache: any = null;
+    let statsCacheTime = 0;
+    const STATS_TTL = 30_000;
+
+    // GET /admin/api/stats - Cache statistics (with 30s in-memory cache)
     fastify.get('/admin/api/stats', async () => {
-        const total = await prisma.tmdbCache.count();
-        const now = new Date();
-        const expired = await prisma.tmdbCache.count({
-            where: { expiresAt: { lt: now } }
-        });
+        if (statsCache && Date.now() - statsCacheTime < STATS_TTL) return statsCache;
 
-        // Count by content type
-        const allKeys = await prisma.tmdbCache.findMany({
-            select: { url: true },
-        });
+        const rows = await prisma.$queryRawUnsafe<Array<{ metric: string; cnt: number }>>(`
+            SELECT 'total' as metric, COUNT(*) as cnt FROM TmdbCache
+            UNION ALL SELECT 'expired', COUNT(*) FROM TmdbCache WHERE expiresAt < ${Date.now()}
+            UNION ALL
+            SELECT
+                CASE
+                    WHEN url LIKE '%/movie/%' THEN 'movies'
+                    WHEN url LIKE '%/tv/%' THEN 'tvShows'
+                    WHEN url LIKE '%/person/%' THEN 'people'
+                    WHEN url LIKE '%/popular%' OR url LIKE '%/top_rated%' OR url LIKE '%/now_playing%'
+                        OR url LIKE '%/on_the_air%' OR url LIKE '%/airing_today%' OR url LIKE '%/trending%'
+                        OR url LIKE '%/discover%' THEN 'lists'
+                    ELSE 'other'
+                END as metric,
+                COUNT(*) as cnt
+            FROM TmdbCache GROUP BY metric
+        `);
 
-        let movies = 0, tvShows = 0, people = 0, lists = 0, other = 0;
-        for (const row of allKeys) {
-            const url = row.url;
-            if (/\/movie\/\d+/.test(url)) movies++;
-            else if (/\/tv\/\d+/.test(url)) tvShows++;
-            else if (/\/person\/\d+/.test(url)) people++;
-            else if (/\/(popular|top_rated|now_playing|on_the_air|airing_today|trending|discover)/.test(url)) lists++;
-            else other++;
+        const stats: any = { movies: 0, tvShows: 0, people: 0, lists: 0, other: 0 };
+        for (const row of rows) {
+            const v = Number(row.cnt);
+            if (row.metric === 'total') stats.total = v;
+            else if (row.metric === 'expired') stats.expired = v;
+            else stats[row.metric] = v;
         }
+        const total = stats.total || 0;
+        const expired = stats.expired || 0;
+        const breakdown = { movies: stats.movies, tvShows: stats.tvShows, people: stats.people, lists: stats.lists, other: stats.other };
 
         const uptimeMs = Date.now() - startTime;
         const uptimeHours = Math.floor(uptimeMs / 3600000);
@@ -49,14 +64,17 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             dbSize = stat.size;
         } catch {}
 
-        return {
+        const result = {
             total,
             expired,
             active: total - expired,
-            breakdown: { movies, tvShows, people, lists, other },
+            breakdown,
             uptime: { hours: uptimeHours, minutes: uptimeMinutes, ms: uptimeMs },
             dbSize,
         };
+        statsCache = result;
+        statsCacheTime = Date.now();
+        return result;
     });
 
     // GET /admin/api/cache - List cache entries with pagination and search
@@ -82,7 +100,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             prisma.tmdbCache.findMany({
                 where,
                 select: { id: true, url: true, createdAt: true, updatedAt: true, expiresAt: true },
-                orderBy: { updatedAt: 'desc' },
+                orderBy: { id: 'desc' },
                 skip,
                 take: limit,
             }),
