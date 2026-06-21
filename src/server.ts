@@ -100,20 +100,22 @@ fastify.get('/*', async (request, reply) => {
 
     try {
         const data = await handleTmdbRequest(url);
-        // Log API call (fire and forget)
+        // Log API call (fire and forget) — only log detail pages with titles
         if (!isInternal) {
-            const title = data?.title || data?.name || data?.results?.[0]?.title || data?.results?.[0]?.name || null;
-            prisma.apiLog.create({
-                data: {
-                    url: url.split('?')[0] || '',
-                    title: title ? String(title).substring(0, 200) : null,
-                    type: parseApiType(url),
-                    source: 'external',
-                    hit: true,
-                    ip: clientIp,
-                    ua: ua.substring(0, 300),
-                }
-            }).catch(() => {});
+            const title = data?.title || data?.name || null;
+            if (title) {
+                prisma.apiLog.create({
+                    data: {
+                        url: url.split('?')[0] || '',
+                        title: String(title).substring(0, 200),
+                        type: parseApiType(url),
+                        source: 'external',
+                        hit: true,
+                        ip: clientIp,
+                        ua: ua.substring(0, 300),
+                    }
+                }).catch(() => {});
+            }
         }
         return data;
     } catch (err: any) {
@@ -123,8 +125,8 @@ fastify.get('/*', async (request, reply) => {
         } else {
             request.log.error(`[ERROR] Upstream request failed with status ${status}`);
         }
-        // Log failed external calls too
-        if (!isInternal) {
+        // Log failed external calls too — only detail pages
+        if (!isInternal && /\/(movie|tv|person)\/\d+/.test(url)) {
             prisma.apiLog.create({
                 data: {
                     url: url.split('?')[0] || '',
