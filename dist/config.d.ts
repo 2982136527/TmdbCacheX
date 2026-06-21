@@ -13,6 +13,7 @@ interface AppConfig {
     };
     logRetentionDays: number;
 }
+export declare function getConfigPath(): string;
 export declare const config: AppConfig;
 export declare function updateConfig(partial: {
     tmdb?: {
