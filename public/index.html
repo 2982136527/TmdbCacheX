@@ -123,6 +123,12 @@
         .episode-row:last-child { border-bottom: none; }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+        .stats-cell { padding: 6px 14px; border-right: 1px solid rgba(255,255,255,0.06); }
+        .stats-cell:nth-child(3n) { border-right: none; }
+        @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(5, 1fr); } .stats-cell:nth-child(3n) { border-right: 1px solid rgba(255,255,255,0.06); } .stats-cell:nth-child(5n) { border-right: none; } }
+        @media (min-width: 1024px) { .stats-grid { grid-template-columns: repeat(9, 1fr); } .stats-cell:nth-child(5n) { border-right: 1px solid rgba(255,255,255,0.06); } .stats-cell:last-child { border-right: none; } }
+
         /* Mobile responsive */
         @media (max-width: 640px) {
             .modal-box { width: 100vw; max-width: 100vw; max-height: 100vh; border-radius: 0; }
@@ -159,40 +165,40 @@
 
         <!-- Stats Panel -->
         <div class="glass rounded-2xl p-5 mb-6 fade-in">
-            <div class="flex flex-wrap divide-x divide-white/[0.06]">
-                <div class="px-4 py-1">
+            <div class="stats-grid">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">缓存总数</div>
                     <div class="text-lg font-bold text-white" id="statTotal">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">有效缓存</div>
                     <div class="text-lg font-bold text-emerald-400" id="statActive">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">已过期</div>
                     <div class="text-lg font-bold text-amber-400" id="statExpired">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">Warmer</div>
                     <div class="text-sm font-bold" id="statWarmer">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">总调用</div>
                     <div class="text-lg font-bold text-white" id="statApiTotal">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">今日调用</div>
                     <div class="text-lg font-bold text-emerald-400" id="statApiToday">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">命中率</div>
                     <div class="text-lg font-bold text-pink-400" id="statApiHitRate">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">外部调用</div>
                     <div class="text-lg font-bold text-violet-400" id="statApiExternal">-</div>
                 </div>
-                <div class="px-4 py-1">
+                <div class="stats-cell">
                     <div class="text-[10px] text-slate-500 mb-1">数据库</div>
                     <div class="text-lg font-bold text-sky-400" id="statDbSize">-</div>
                 </div>
