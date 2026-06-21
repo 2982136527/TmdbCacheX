@@ -17,7 +17,28 @@ TmdbCacheX 是一个基于 Node.js、Fastify 和 Prisma (SQLite) 构建的高性
 
 ## 快速开始
 
-### 安装
+### Docker 部署（推荐）
+
+```bash
+docker run -d \
+  --name tmdbcachex \
+  -p 3333:3333 \
+  -v /你的数据目录:/app/data \
+  ghcr.io/2982136527/tmdbcachex:latest
+```
+
+启动后访问 `http://IP:3333`，在管理后台配置 TMDB API Key 即可使用。
+
+数据目录结构（自动创建）：
+- `config.json` — 配置文件
+- `db/dev.db` — SQLite 数据库
+
+也可从 Docker Hub 拉取：
+```bash
+docker pull qiuhu/tmdbcachex:latest
+```
+
+### 源码安装
 
 ```bash
 git clone https://github.com/2982136527/TmdbCacheX.git
