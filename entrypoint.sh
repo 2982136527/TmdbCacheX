@@ -6,9 +6,11 @@ DATA_DIR="/app/data"
 # Auto-create config.json in data volume if not exists
 if [ ! -f "$DATA_DIR/config.json" ]; then
     cp /app/config.example.json "$DATA_DIR/config.json"
-    echo "[ENTRYPOINT] Created default config.json in /app/data — please edit it to set your TMDB API key."
+    echo "[ENTRYPOINT] Created default config.json in /app/data — please edit it or set your API key in the admin panel."
 fi
-ln -sf "$DATA_DIR/config.json" /app/config.json
+
+# Tell the app to read/write config directly from data volume
+export CONFIG_PATH="$DATA_DIR/config.json"
 
 # Symlink database directory so DB is always created in data volume
 mkdir -p "$DATA_DIR/db"

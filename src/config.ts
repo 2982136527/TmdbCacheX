@@ -17,11 +17,14 @@ interface AppConfig {
     logRetentionDays: number;
 }
 
-const CONFIG_FILE = 'config.json';
 const PLACEHOLDER_VALUES = ['YOUR_TMDB_API_KEY_HERE', '', 'your_key_here'];
 
+export function getConfigPath(): string {
+    return process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.json');
+}
+
 function loadConfig(): AppConfig {
-    const configPath = path.resolve(process.cwd(), CONFIG_FILE);
+    const configPath = getConfigPath();
 
     if (!fs.existsSync(configPath)) {
         console.warn('⚠️  config.json not found — creating default config.');

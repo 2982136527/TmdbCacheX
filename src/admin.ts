@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
 import { prisma } from './proxy.js';
-import { config, updateConfig } from './config.js';
+import { config, updateConfig, getConfigPath } from './config.js';
 import { testDnsConnectivity } from './dns-resolver.js';
 
 const startTime = Date.now();
@@ -605,7 +605,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         }
 
         // Write to config.json (atomic: write to temp file then rename)
-        const configPath = path.resolve(process.cwd(), 'config.json');
+        const configPath = getConfigPath();
         const tmpPath = configPath + '.tmp';
         try {
             fs.writeFileSync(tmpPath, JSON.stringify(newConfig, null, 2) + '\n');
