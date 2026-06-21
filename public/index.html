@@ -390,7 +390,10 @@
                 <div class="space-y-5">
                     <div>
                         <label class="block text-xs text-slate-400 mb-2">TMDB API Key</label>
-                        <input type="text" id="configApiKeyInput" placeholder="输入你的 TMDB API Key" class="w-full text-sm font-mono">
+                        <div class="relative">
+                            <input type="password" id="configApiKeyInput" placeholder="输入你的 TMDB API Key" class="w-full text-sm font-mono pr-10">
+                            <button type="button" onclick="toggleKeyVisibility('configApiKeyInput', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs">显示</button>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-xs text-slate-400 mb-2">语言</label>
@@ -409,7 +412,10 @@
                     </div>
                     <div>
                         <label class="block text-xs text-slate-400 mb-2">认证密钥（可选）</label>
-                        <input type="text" id="configAuthKeyInput" placeholder="留空表示不需要认证" class="w-full text-sm font-mono">
+                        <div class="relative">
+                            <input type="password" id="configAuthKeyInput" placeholder="留空表示不需要认证" class="w-full text-sm font-mono pr-10">
+                            <button type="button" onclick="toggleKeyVisibility('configAuthKeyInput', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs">显示</button>
+                        </div>
                         <p class="text-[10px] text-slate-600 mt-1">设置后，客户端需在 api_key 参数填入此密钥才能使用代理。适用于 StrmAssistant 等插件。</p>
                     </div>
                     <div class="flex items-center justify-between py-2">
@@ -976,13 +982,37 @@
         }
 
         // --- Config ---
+        function maskKey(key) {
+            if (!key || key.length <= 8) return key;
+            return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
+        }
+
+        function toggleKeyVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                input.value = input.dataset.realValue || input.value;
+                btn.textContent = '隐藏';
+            } else {
+                input.type = 'password';
+                if (input.dataset.realValue) input.value = maskKey(input.dataset.realValue);
+                btn.textContent = '显示';
+            }
+        }
+
         async function loadConfig() {
             try {
                 const data = await api('/config/raw');
-                document.getElementById('configApiKeyInput').value = data.tmdb.apiKey;
+                const apiKeyInput = document.getElementById('configApiKeyInput');
+                const authKeyInput = document.getElementById('configAuthKeyInput');
+                apiKeyInput.dataset.realValue = data.tmdb.apiKey;
+                apiKeyInput.value = maskKey(data.tmdb.apiKey);
+                apiKeyInput.type = 'password';
+                authKeyInput.dataset.realValue = data.tmdb.authKey || '';
+                authKeyInput.value = maskKey(data.tmdb.authKey || '');
+                authKeyInput.type = 'password';
                 document.getElementById('configLangInput').value = data.tmdb.language;
                 document.getElementById('configProxyInput').value = data.tmdb.httpProxy || '';
-                document.getElementById('configAuthKeyInput').value = data.tmdb.authKey || '';
                 document.getElementById('configProxyImagesInput').checked = data.tmdb.proxyImages !== false;
                 document.getElementById('configResolveDnsInput').checked = data.tmdb.resolveTmdbDns === true;
                 document.getElementById('configPortInput').value = data.server.port;
@@ -993,10 +1023,12 @@
 
         async function saveConfig() {
             const resultEl = document.getElementById('configSaveResult');
-            const apiKey = document.getElementById('configApiKeyInput').value.trim();
+            const apiKeyInput = document.getElementById('configApiKeyInput');
+            const authKeyInput = document.getElementById('configAuthKeyInput');
+            const apiKey = apiKeyInput.value === maskKey(apiKeyInput.dataset.realValue) ? apiKeyInput.dataset.realValue : apiKeyInput.value.trim();
             const language = document.getElementById('configLangInput').value;
             const httpProxy = document.getElementById('configProxyInput').value.trim();
-            const authKey = document.getElementById('configAuthKeyInput').value.trim();
+            const authKey = authKeyInput.value === maskKey(authKeyInput.dataset.realValue) ? authKeyInput.dataset.realValue : authKeyInput.value.trim();
             const proxyImages = document.getElementById('configProxyImagesInput').checked;
             const resolveTmdbDns = document.getElementById('configResolveDnsInput').checked;
             const port = parseInt(document.getElementById('configPortInput').value);
