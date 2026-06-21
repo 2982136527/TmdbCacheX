@@ -1369,7 +1369,7 @@
                 content.innerHTML = `
                     <div class="p-6">
                         <div class="flex items-start gap-5 mb-6">
-                            ${data.profile_path ? `<img src="${imgUrl('w185', data.profile_path, true)}" class="w-24 rounded-xl object-cover" style="aspect-ratio:2/3" alt="">` : ''}
+                            ${data.profile_path ? `<img src="${data.profile_path}" class="w-24 rounded-xl object-cover" style="aspect-ratio:2/3" alt="">` : ''}
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-3 mb-2">
                                     <button onclick="closeModal()" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">返回</button>
