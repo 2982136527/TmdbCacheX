@@ -59,6 +59,14 @@ jobs:
             ${{ steps.meta.outputs.DH_IMAGE }}:${{ steps.meta.outputs.VERSION }}
             ${{ steps.meta.outputs.DH_IMAGE }}:latest
 
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ steps.meta.outputs.DH_IMAGE }}
+          readme-filepath: ./dockerhub-description.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
