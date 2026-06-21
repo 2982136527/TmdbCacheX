@@ -2,6 +2,10 @@
 
 # TmdbCacheX
 
+[![Docker Hub](https://img.shields.io/docker/pulls/qiuhusama/tmdbcachex?label=Docker%20Hub&logo=docker&color=2496ED)](https://hub.docker.com/r/qiuhusama/tmdbcachex)
+[![GHCR](https://img.shields.io/badge/GHCR-available-2088FF?logo=github)](https://github.com/2982136527/TmdbCacheX/pkgs/container/tmdbcachex)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
 TmdbCacheX 是一个基于 Node.js、Fastify 和 Prisma (SQLite) 构建的高性能 TMDB 缓存代理服务器。它会自动缓存 TMDB API 响应到本地数据库，减少对上游的请求频率，提升媒体服务器的刮削速度。
 
 ## 功能特性
