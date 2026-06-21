@@ -35,7 +35,7 @@ docker run -d \
 
 也可从 Docker Hub 拉取：
 ```bash
-docker pull qiuhu/tmdbcachex:latest
+docker pull qiuhusama/tmdbcachex:latest
 ```
 
 ### 源码安装
