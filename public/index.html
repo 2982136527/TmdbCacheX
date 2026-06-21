@@ -1326,7 +1326,6 @@
         let discoverLoading = false;
         let discoverGenreId = 0;
         let discoverType = 'movie';
-        let discoverObserver = null;
 
         function renderGenreItem(item) {
             return `<div class="cursor-pointer group" onclick="closeModal(); setTimeout(() => openDetail(${item.tmdbId}), 100)">
@@ -1336,18 +1335,6 @@
             </div>`;
         }
 
-        function setupGenreObserver() {
-            if (discoverObserver) discoverObserver.disconnect();
-            const sentinel = document.getElementById('genreSentinel');
-            if (!sentinel) return;
-            discoverObserver = new IntersectionObserver((entries) => {
-                if (entries[0].isIntersecting && !discoverLoading && discoverPage < discoverTotalPages) {
-                    loadMoreGenre();
-                }
-            }, { root: document.querySelector('.modal-box'), rootMargin: '400px' });
-            discoverObserver.observe(sentinel);
-        }
-
         async function searchByGenre(genreId, genreName, type) {
             const modal = document.getElementById('detailModal');
             const content = document.getElementById('modalContent');
@@ -1355,7 +1342,6 @@
             document.body.style.overflow = 'hidden';
             content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
 
-            if (discoverObserver) { discoverObserver.disconnect(); discoverObserver = null; }
             discoverGenreId = genreId;
             discoverType = type === 'tv' ? 'tv' : 'movie';
             discoverPage = 1;
@@ -1372,13 +1358,22 @@
                             <h2 class="text-lg font-bold text-white">${genreName}</h2>
                         </div>
                         ${items.length === 0 ? '<div class="text-center py-20 text-slate-500">暂无结果</div>' : `
-                        <div id="genreGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(renderGenreItem).join('')}</div>
-                        <div id="genreSentinel" class="h-1"></div>
-                        <div id="genreSpinner" class="py-4 text-center text-xs text-slate-500 hidden">加载中...</div>`}
+                        <div id="genreScroll" class="max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+                            <div id="genreGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(renderGenreItem).join('')}</div>
+                            <div id="genreSpinner" class="py-4 text-center text-xs text-slate-500 hidden">加载中...</div>
+                        </div>`}
                     </div>
                 `;
 
-                if (items.length > 0) setupGenreObserver();
+                const scrollEl = document.getElementById('genreScroll');
+                if (scrollEl) {
+                    scrollEl.addEventListener('scroll', () => {
+                        if (discoverLoading || discoverPage >= discoverTotalPages) return;
+                        if (scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 300) {
+                            loadMoreGenre();
+                        }
+                    });
+                }
             } catch (e) {
                 content.innerHTML = '<div class="text-center py-20 text-red-400">加载失败: ' + e.message + '</div>';
             }
@@ -1394,12 +1389,10 @@
                 discoverPage++;
                 const data = await api(`/tmdb/discover?type=${discoverType}&genre=${discoverGenreId}&page=${discoverPage}`);
                 const items = data.results || [];
-                const sentinel = document.getElementById('genreSentinel');
-                sentinel.insertAdjacentHTML('beforeend', items.map(renderGenreItem).join(''));
+                document.getElementById('genreGrid').insertAdjacentHTML('beforeend', items.map(renderGenreItem).join(''));
 
                 if (discoverPage >= discoverTotalPages) {
                     spinner.textContent = '已加载全部';
-                    if (discoverObserver) { discoverObserver.disconnect(); discoverObserver = null; }
                 }
             } catch (e) {
                 spinner.textContent = '加载失败，继续滚动重试';
