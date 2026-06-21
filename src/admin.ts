@@ -108,81 +108,46 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         const forceProxy = query.proxy === '1';
         const img = (size: string, p: string | null) => imgUrl(size, p, forceProxy);
 
+        // Only query detail pages (much smaller than list pages, 30-50KB vs up to 3MB)
+        const movieWhere = "url LIKE '3/movie/%' AND url NOT LIKE '3/movie/%/%/%'";
+        const tvWhere = "url LIKE '3/tv/%' AND url NOT LIKE '3/tv/%/%/%'";
+        const where = typeFilter === 'movie' ? movieWhere
+            : typeFilter === 'tv' ? tvWhere
+            : `(${movieWhere} OR ${tvWhere})`;
+
         const seen = new Set<number>();
-        const allItems: any[] = [];
-        const BATCH = 1000;
+        const items: any[] = [];
+        const fetchLimit = limit * 3; // extra buffer for dedup
+        const dbOffset = (page - 1) * fetchLimit;
 
-        // Process in batches to avoid memory issues
-        for (let offset = 0; ; offset += BATCH) {
-            const entries = await prisma.tmdbCache.findMany({
-                select: { id: true, url: true, response: true },
-                orderBy: { updatedAt: 'desc' },
-                skip: offset,
-                take: BATCH,
-            });
-            if (entries.length === 0) break;
+        // Direct SQL query — only load detail page entries, not list pages
+        const entries = await prisma.$queryRawUnsafe<Array<{ url: string; response: string }>>(
+            `SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY updatedAt DESC LIMIT ${fetchLimit} OFFSET ${dbOffset}`
+        );
 
-            for (const entry of entries) {
-                try {
-                    const data = JSON.parse(entry.response);
-
-                    // Detail page: /movie/123 or /tv/123
-                    if (/\/movie\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'movie')) {
-                        if (data.poster_path && !seen.has(data.id)) {
-                            seen.add(data.id);
-                            allItems.push({
-                                tmdbId: data.id, type: 'movie',
-                                title: data.title || 'Unknown',
-                                posterPath: img('w500', data.poster_path),
-                                voteAverage: data.vote_average ?? 0,
-                                releaseDate: data.release_date || '',
-                            });
-                        }
-                    } else if (/\/tv\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'tv')) {
-                        if (data.poster_path && !seen.has(data.id)) {
-                            seen.add(data.id);
-                            allItems.push({
-                                tmdbId: data.id, type: 'tv',
-                                title: data.name || 'Unknown',
-                                posterPath: img('w500', data.poster_path),
-                                voteAverage: data.vote_average ?? 0,
-                                releaseDate: data.first_air_date || '',
-                            });
-                        }
-                    }
-                    // List page: results[] array
-                    else if (Array.isArray(data.results)) {
-                        const isMovieList = /\/movie\//.test(entry.url) || /\/trending\/movie\//.test(entry.url) || /\/discover\/movie/.test(entry.url);
-                        const isTvList = /\/tv\//.test(entry.url) || /\/trending\/tv\//.test(entry.url) || /\/discover\/tv/.test(entry.url);
-                        const wantType = isMovieList ? 'movie' : isTvList ? 'tv' : 'all';
-                        if (typeFilter !== 'all' && wantType !== 'all' && wantType !== typeFilter) continue;
-
-                        for (const item of data.results) {
-                            if (!item.poster_path || seen.has(item.id)) continue;
-                            seen.add(item.id);
-                            const isMovie = wantType === 'movie' || (wantType === 'all' && (item.title || item.release_date));
-                            allItems.push({
-                                tmdbId: item.id, type: isMovie ? 'movie' : 'tv',
-                                title: (isMovie ? item.title : item.name) || 'Unknown',
-                                posterPath: img('w500', item.poster_path),
-                                voteAverage: item.vote_average ?? 0,
-                                releaseDate: (isMovie ? item.release_date : item.first_air_date) || '',
-                            });
-                        }
-                    }
-                } catch { /* skip unparseable */ }
-            }
-
-            if (entries.length < BATCH) break;
+        for (const entry of entries) {
+            if (items.length >= limit) break;
+            try {
+                const data = JSON.parse(entry.response);
+                if (!data.poster_path || seen.has(data.id)) continue;
+                seen.add(data.id);
+                const isMovie = entry.url.startsWith('3/movie/');
+                items.push({
+                    tmdbId: data.id, type: isMovie ? 'movie' : 'tv',
+                    title: (isMovie ? data.title : data.name) || 'Unknown',
+                    posterPath: img('w500', data.poster_path),
+                    voteAverage: data.vote_average ?? 0,
+                    releaseDate: (isMovie ? data.release_date : data.first_air_date) || '',
+                });
+            } catch { /* skip */ }
         }
 
-        const filtered = searchQuery
-            ? allItems.filter(item => item.title.toLowerCase().includes(searchQuery))
-            : allItems;
-
-        const total = filtered.length;
+        // Get total unique count (cached per typeFilter)
+        const totalRow = await prisma.$queryRawUnsafe<Array<{ cnt: number }>>(
+            `SELECT COUNT(*) as cnt FROM TmdbCache WHERE ${where}`
+        );
+        const total = Number(totalRow[0]?.cnt || 0);
         const totalPages = Math.ceil(total / limit);
-        const items = filtered.slice((page - 1) * limit, page * limit);
 
         return { items, total, page, totalPages };
     });
