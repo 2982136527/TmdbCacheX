@@ -28,10 +28,13 @@ export class CacheWarmer {
         this.apiKey = apiKey;
         this.isRunning = true;
 
-        console.log('[WARMER] 🚀 Cache Warmer started! (Dual-Engine: Updates & Archive)');
+        console.log('[WARMER] 🚀 Cache Warmer started! (Triple-Engine: Updates, Changes & Archive)');
 
         // Start HOT loop (Updates)
         this.startHotLoop().catch(err => console.error(`[HOT-LOOP] Crash: ${err.message}`));
+
+        // Start CHANGES loop (Incremental sync)
+        this.startChangesLoop().catch(err => console.error(`[CHANGES-LOOP] Crash: ${err.message}`));
 
         // Start COLD loop (Archive)
         this.startColdLoop().catch(err => console.error(`[COLD-LOOP] Crash: ${err.message}`));
@@ -66,6 +69,95 @@ export class CacheWarmer {
                 await new Promise(r => setTimeout(r, 60 * 1000));
             }
         }
+    }
+
+    private async startChangesLoop() {
+        console.log('[CHANGES-LOOP] 🔄 Incremental Sync Engine Started');
+        // Track last sync date to avoid redundant fetches
+        let lastSyncDate = '';
+        while (this.isRunning) {
+            try {
+                const today = new Date().toISOString().split('T')[0]!;
+                if (today !== lastSyncDate) {
+                    await this.runChangesSync();
+                    lastSyncDate = today;
+                }
+                console.log('[CHANGES-LOOP] ✅ Changes sync complete. Sleeping for 6 hours...');
+                await new Promise(r => setTimeout(r, 6 * 3600 * 1000));
+            } catch (e) {
+                console.error('[CHANGES-LOOP] Error:', e);
+                await new Promise(r => setTimeout(r, 60 * 1000));
+            }
+        }
+    }
+
+    private async runChangesSync() {
+        const endDate = new Date().toISOString().split('T')[0]!;
+        const startDate = new Date(Date.now() - 24 * 3600 * 1000).toISOString().split('T')[0]!;
+        console.log(`[CHANGES-LOOP] 📋 Checking changes from ${startDate} to ${endDate}`);
+
+        // Fetch changed movies and TV shows
+        const [movieIds, tvIds] = await Promise.all([
+            this.fetchChangedIds('3/movie/changes', startDate, endDate),
+            this.fetchChangedIds('3/tv/changes', startDate, endDate),
+        ]);
+
+        const total = movieIds.length + tvIds.length;
+        if (total === 0) {
+            console.log('[CHANGES-LOOP] No changes detected.');
+            return;
+        }
+        console.log(`[CHANGES-LOOP] Found ${movieIds.length} movies, ${tvIds.length} TV shows changed.`);
+
+        // Refresh each changed item
+        let refreshed = 0;
+        for (const id of movieIds) {
+            if (!this.isRunning) break;
+            try {
+                const url = `3/movie/${id}?api_key=${this.apiKey}&language=${config.tmdb.language}`;
+                await handleTmdbRequest(url, true);
+                refreshed++;
+                await new Promise(r => setTimeout(r, 1000));
+            } catch (e: any) {
+                console.error(`[CHANGES-LOOP] Failed movie ${id}: ${e.message}`);
+            }
+        }
+        for (const id of tvIds) {
+            if (!this.isRunning) break;
+            try {
+                const url = `3/tv/${id}?api_key=${this.apiKey}&language=${config.tmdb.language}`;
+                await handleTmdbRequest(url, true);
+                refreshed++;
+                await new Promise(r => setTimeout(r, 1000));
+            } catch (e: any) {
+                console.error(`[CHANGES-LOOP] Failed TV ${id}: ${e.message}`);
+            }
+        }
+        console.log(`[CHANGES-LOOP] ✅ Refreshed ${refreshed}/${total} changed items.`);
+    }
+
+    private async fetchChangedIds(endpoint: string, startDate: string, endDate: string): Promise<number[]> {
+        const ids: number[] = [];
+        let page = 1;
+        const maxPages = 50; // safety limit
+        while (page <= maxPages) {
+            if (!this.isRunning) break;
+            const url = `${endpoint}?api_key=${this.apiKey}&start_date=${startDate}&end_date=${endDate}&page=${page}`;
+            try {
+                const data = await handleTmdbRequest(url, true);
+                const results = data?.results || [];
+                for (const item of results) {
+                    if (item.id && !item.adult) ids.push(item.id);
+                }
+                if (page >= (data?.total_pages || 1)) break;
+                page++;
+                await new Promise(r => setTimeout(r, 500));
+            } catch (e: any) {
+                console.error(`[CHANGES-LOOP] Failed to fetch ${endpoint} page ${page}: ${e.message}`);
+                break;
+            }
+        }
+        return ids;
     }
 
     private async runHotCrawl() {
