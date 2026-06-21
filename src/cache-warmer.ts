@@ -20,14 +20,12 @@ const CHECKPOINT_FILE = 'warmer_checkpoint.json';
  */
 export class CacheWarmer {
     private isRunning = false;
-    private apiKey: string;
-
-    constructor() {
-        this.apiKey = config.tmdb.apiKey;
-    }
+    private apiKey = '';
 
     public start() {
-        if (this.isRunning || !this.apiKey) return;
+        const apiKey = config.tmdb.apiKey;
+        if (this.isRunning || !apiKey) return;
+        this.apiKey = apiKey;
         this.isRunning = true;
 
         console.log('[WARMER] 🚀 Cache Warmer started! (Dual-Engine: Updates & Archive)');
