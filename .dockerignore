@@ -1,0 +1,8 @@
+node_modules
+.git
+*.db
+*.db-journal
+config.json
+warmer_checkpoint.json
+dist/
+.env
