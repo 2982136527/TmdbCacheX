@@ -122,7 +122,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
 
         // Direct SQL query — only load detail page entries, not list pages
         const entries = await prisma.$queryRawUnsafe<Array<{ url: string; response: string }>>(
-            `SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY updatedAt DESC LIMIT ${fetchLimit} OFFSET ${dbOffset}`
+            `SELECT url, response FROM TmdbCache WHERE ${where} ORDER BY id DESC LIMIT ${fetchLimit} OFFSET ${dbOffset}`
         );
 
         for (const entry of entries) {
