@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -34,9 +33,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+      - name: Extract version and image name
+        id: meta
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          echo "IMAGE=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -45,20 +46,20 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.IMAGE }}:${{ steps.meta.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.IMAGE }}:latest
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: v${{ steps.version.outputs.VERSION }}
+          name: v${{ steps.meta.outputs.VERSION }}
           body: |
             ## Docker 镜像
 
             ```
-            docker pull ghcr.io/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
-            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+            docker pull ghcr.io/${{ steps.meta.outputs.IMAGE }}:${{ steps.meta.outputs.VERSION }}
+            docker pull ghcr.io/${{ steps.meta.outputs.IMAGE }}:latest
             ```
 
             **支持平台:** `linux/amd64`, `linux/arm64`
@@ -69,6 +70,6 @@ jobs:
             docker run -d \
               -p 3333:3333 \
               -v /你的数据目录:/app/data \
-              ghcr.io/${{ env.IMAGE_NAME }}:latest
+              ghcr.io/${{ steps.meta.outputs.IMAGE }}:latest
             ```
           generate_release_notes: true
