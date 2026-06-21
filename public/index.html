@@ -1201,7 +1201,7 @@
                         </div>
 
                         <!-- Genres -->
-                        ${d.genres?.length ? `<div class="flex flex-wrap gap-2 mb-4">${d.genres.map(g => `<span class="genre-chip">${g.name}</span>`).join('')}</div>` : ''}
+                        ${d.genres?.length ? `<div class="flex flex-wrap gap-2 mb-4">${d.genres.map(g => `<span class="genre-chip cursor-pointer hover:bg-pink-500/20 hover:text-pink-300 transition-colors" onclick="searchByGenre(${g.id}, '${g.name}', '${d.type}')">${g.name}</span>`).join('')}</div>` : ''}
 
                         <!-- Overview -->
                         ${d.overview ? `<div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-2">简介</h3><p class="text-sm text-slate-400 leading-relaxed">${d.overview}</p></div>` : ''}
@@ -1237,7 +1237,7 @@
                         ${d.cast?.length ? `
                         <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">演员</h3>
                         <div class="flex gap-4 overflow-x-auto scrollbar-thin pb-2">${d.cast.map(c => `
-                            <div class="cast-card">
+                            <div class="cast-card cursor-pointer hover:bg-white/[0.08] transition-all" onclick="openPersonDetail(${c.id})">
                                 ${c.profilePath ? `<img src="${c.profilePath}" alt="${c.name}">` : '<div class="w-16 h-16 rounded-full bg-white/5 mx-auto mb-1.5"></div>'}
                                 <div class="text-[11px] text-slate-300 truncate">${c.name}</div>
                                 <div class="text-[10px] text-slate-500 truncate">${c.character}</div>
@@ -1319,6 +1319,92 @@
             } catch (e) {
                 container.innerHTML = '<div class="text-xs text-red-400 py-4">加载失败</div>';
             }
+        }
+
+        async function searchByGenre(genreId, genreName, type) {
+            const modal = document.getElementById('detailModal');
+            const content = document.getElementById('modalContent');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
+
+            try {
+                const discoverType = type === 'tv' ? 'tv' : 'movie';
+                const data = await api(`/tmdb/discover?type=${discoverType}&genre=${genreId}`);
+                const items = data.results || [];
+
+                content.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex items-center gap-3 mb-6">
+                            <button onclick="closeModal()" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">返回</button>
+                            <h2 class="text-lg font-bold text-white">${genreName}</h2>
+                            <span class="text-xs text-slate-500">${items.length} 部</span>
+                        </div>
+                        ${items.length === 0 ? '<div class="text-center py-20 text-slate-500">暂无结果</div>' : `
+                        <div class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(item => `
+                            <div class="cursor-pointer group" onclick="closeModal(); setTimeout(() => openDetail(${item.tmdbId}), 100)">
+                                ${item.posterPath ? `<img src="${item.posterPath}" class="w-full rounded-lg mb-1 object-cover group-hover:ring-2 ring-pink-500/50 transition-all" style="aspect-ratio:2/3" alt="">` : '<div class="w-full rounded-lg bg-white/5 mb-1" style="aspect-ratio:2/3"></div>'}
+                                <div class="text-[10px] text-slate-400 truncate">${item.title}</div>
+                                ${item.voteAverage ? `<div class="text-[10px] text-amber-400">&#9733; ${item.voteAverage.toFixed(1)}</div>` : ''}
+                            </div>`).join('')}</div>`}
+                    </div>
+                `;
+            } catch (e) {
+                content.innerHTML = '<div class="text-center py-20 text-red-400">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        async function openPersonDetail(personId) {
+            const modal = document.getElementById('detailModal');
+            const content = document.getElementById('modalContent');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
+
+            try {
+                const data = await api(`/tmdb/person/${personId}?proxy=1`);
+                const credits = data.combined_credits?.cast || [];
+                const sorted = credits.filter(c => c.poster_path).sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+                content.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex items-start gap-5 mb-6">
+                            ${data.profile_path ? `<img src="${imgUrl('w185', data.profile_path, true)}" class="w-24 rounded-xl object-cover" style="aspect-ratio:2/3" alt="">` : ''}
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <button onclick="closeModal()" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">返回</button>
+                                    <h2 class="text-lg font-bold text-white">${data.name}</h2>
+                                </div>
+                                ${data.biography ? `<p class="text-xs text-slate-400 leading-relaxed line-clamp-4">${data.biography}</p>` : ''}
+                                <div class="flex flex-wrap gap-2 mt-2 text-[10px] text-slate-500">
+                                    ${data.birthday ? `<span>出生: ${data.birthday}</span>` : ''}
+                                    ${data.place_of_birth ? `<span>${data.place_of_birth}</span>` : ''}
+                                    ${data.known_for_department ? `<span>职业: ${data.known_for_department}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3">作品 (${sorted.length})</h3>
+                        ${sorted.length === 0 ? '<div class="text-center py-10 text-slate-500">暂无作品</div>' : `
+                        <div class="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-[60vh] overflow-y-auto scrollbar-thin pr-1">${sorted.map(item => {
+                            const isMovie = !!(item.title || item.release_date);
+                            return `
+                            <div class="cursor-pointer group" onclick="closeModal(); setTimeout(() => openDetail(${item.id}), 100)">
+                                <img src="${imgUrl('w300', item.poster_path, true)}" class="w-full rounded-lg mb-1 object-cover group-hover:ring-2 ring-pink-500/50 transition-all" style="aspect-ratio:2/3" alt="" loading="lazy">
+                                <div class="text-[10px] text-slate-400 truncate">${isMovie ? item.title : item.name}</div>
+                                ${item.vote_average ? `<div class="text-[10px] text-amber-400">&#9733; ${item.vote_average.toFixed(1)}</div>` : ''}
+                            </div>`;
+                        }).join('')}</div>`}
+                    </div>
+                `;
+            } catch (e) {
+                content.innerHTML = '<div class="text-center py-20 text-red-400">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        function imgUrl(size, path, forceProxy) {
+            if (!path) return '';
+            if (forceProxy) return '/img/' + size + path;
+            return 'https://image.tmdb.org/t/p/' + size + path;
         }
 
         function closeModal() {

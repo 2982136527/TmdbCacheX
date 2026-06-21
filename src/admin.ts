@@ -432,6 +432,65 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         }
     });
 
+    // GET /admin/api/tmdb/discover - Discover by genre
+    fastify.get('/admin/api/tmdb/discover', async (request, reply) => {
+        const query = request.query as { type?: string; genre?: string };
+        const type = query.type === 'tv' ? 'tv' : 'movie';
+        const genre = query.genre;
+        if (!genre) return { results: [] };
+
+        const apiKey = config.tmdb.apiKey;
+        const lang = config.tmdb.language;
+        const forceProxy = true;
+
+        try {
+            const { handleTmdbRequest } = await import('./proxy.js');
+            const urlPath = `3/discover/${type}?api_key=${apiKey}&language=${lang}&with_genres=${genre}&sort_by=popularity.desc&page=1`;
+            const data = await handleTmdbRequest(urlPath, true);
+
+            const results = (data.results || []).filter((item: any) => item.poster_path).map((item: any) => ({
+                tmdbId: item.id,
+                title: type === 'movie' ? item.title : item.name,
+                posterPath: imgUrl('w300', item.poster_path, forceProxy),
+                voteAverage: item.vote_average ?? 0,
+                releaseDate: (type === 'movie' ? item.release_date : item.first_air_date) || '',
+            }));
+
+            return { results };
+        } catch (e: any) {
+            reply.code(500).send({ error: e.message || 'Discover failed' });
+        }
+    });
+
+    // GET /admin/api/tmdb/person/:id - Person detail with credits
+    fastify.get('/admin/api/tmdb/person/:id', async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const query = request.query as { proxy?: string };
+        const forceProxy = query.proxy === '1';
+        const img = (size: string, p: string | null) => imgUrl(size, p, forceProxy);
+
+        try {
+            const { handleTmdbRequest } = await import('./proxy.js');
+            const apiKey = config.tmdb.apiKey;
+            const lang = config.tmdb.language;
+            const urlPath = `3/person/${id}?api_key=${apiKey}&language=${lang}&append_to_response=combined_credits,images,external_ids`;
+            const data = await handleTmdbRequest(urlPath, true);
+
+            return {
+                id: data.id,
+                name: data.name,
+                biography: data.biography || '',
+                birthday: data.birthday || null,
+                place_of_birth: data.place_of_birth || null,
+                known_for_department: data.known_for_department || '',
+                profile_path: img('w185', data.profile_path),
+                combined_credits: data.combined_credits || { cast: [] },
+            };
+        } catch (e: any) {
+            reply.code(500).send({ error: e.message || 'Failed to fetch person' });
+        }
+    });
+
     // GET /admin/api/posters/season/:tvId/:seasonNumber - Season detail
     fastify.get('/admin/api/posters/season/:tvId/:seasonNumber', async (request, reply) => {
         const { tvId, seasonNumber } = request.params as { tvId: string; seasonNumber: string };
