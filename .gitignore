@@ -1,11 +1,22 @@
 node_modules
-# Keep environment variables out of version control
 .env
-# Keep config file (contains API keys) out of version control
 config.json
+warmer_checkpoint.json
 
+# Build output
+dist/
+prisma.config.js
+prisma.config.js.map
+prisma.config.d.ts
+prisma.config.d.ts.map
+
+# Generated
 /generated/prisma
+prisma/prisma/
 
-# Ignore SQLite db
+# Database
 *.db
 *.db-journal
+
+# macOS
+.DS_Store

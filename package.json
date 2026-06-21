@@ -10,13 +10,11 @@
     "prefetch": "tsc && node dist/prefetch.js",
     "simulate": "tsc && node dist/simulate.js",
     "scrape": "tsc && node dist/scraper.js",
-    "db:studio": "prisma studio",
-    "db:viewer": "tsc && node dist/viewer.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "db:studio": "prisma studio"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "CC-BY-NC-SA-4.0",
   "description": "",
   "dependencies": {
     "@fastify/static": "^9.1.3",
