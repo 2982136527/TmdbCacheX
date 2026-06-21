@@ -1,104 +1,101 @@
-![alt text](QQ_1766899956347.png)# TmdbCacheX
+![alt text](QQ_1766899956347.png)
 
-TmdbCacheX 是一个基于 Node.js, Fastify 和 Prisma (SQLite) 构建的高性能 TMDB (The Movie Database) 缓存代理服务器。它的设计目的是为了缓存 TMDB API 的响应，从而减少对 TMDB 的请求频率（避免速率限制）并提高媒体服务器应用程序的响应速度。
+# TmdbCacheX
 
-> **⚠️ 注意**：本项目目前仍处于早期开发阶段，功能不够完善。**数据库缓存数据可能存在遗漏**，这可能会导致刮削结果不全或部分元数据缺失。
+TmdbCacheX 是一个基于 Node.js、Fastify 和 Prisma (SQLite) 构建的高性能 TMDB 缓存代理服务器。它会自动缓存 TMDB API 响应到本地数据库，减少对上游的请求频率，提升媒体服务器的刮削速度。
 
-## 功能特性 (Features)
+## 功能特性
 
-*   **缓存代理 (Caching Proxy)**: 代理对 TMDB 的请求，并将响应结果缓存到本地 SQLite 数据库中。
-*   **数据库模拟 (Database Simulation)**: 可以直接从数据库提供缓存的数据，完全无需访问 TMDB API。
-*   **预取 (Prefetching)**: 包含预取脚本，用于提前获取热门电影和电视剧的数据。
-*   **Studio 验证**: 提供工具来验证和模拟数据库中的条目。
+- **缓存代理** — 代理 TMDB API 请求，自动缓存响应到 SQLite，后续请求直接从本地读取
+- **自动丰富** — 电影/剧集详情页自动附带 credits、images、videos 等数据，人物页自动附带作品列表
+- **预取机制** — 请求列表页或详情页时，自动在后台预取关联数据（推荐、相似、合集等）
+- **Cache Warmer** — 自动巡航模式，定期爬取热门内容填充缓存
+- **管理后台** — 内置 Web 管理界面，支持缓存预览、配置管理、调用日志、API 测试
+- **图片代理** — 代理 TMDB 图片请求，支持 `/img/*` 和 `/t/p/*` 两种路径（兼容 Emby 插件）
+- **DNS 覆盖** — 通过外部 DNS 解析 TMDB 域名，适用于 DNS 污染环境
+- **API 鉴权** — 支持自定义 authKey，防止未授权访问
 
-## 安装 (Installation)
+## 快速开始
 
-1.  克隆仓库:
-    ```bash
-    git clone <你的仓库地址>
-    cd TmdbCacheX
-    ```
+### 安装
 
-2.  安装依赖:
-    ```bash
-    npm install
-    ```
-
-## 配置 (Configuration)
-
-1.  在根目录下创建一个 `.env` 文件 (可以参考示例文件，或者直接使用下面的模板):
-
-    ```env
-    DATABASE_URL="file:./prisma/dev.db"
-    TMDB_API_KEY="你的_TMDB_API_KEY"
-    TMDB_PROXY_URL="http://你的代理地址_如果有的话"
-    ```
-
-    *   `DATABASE_URL`: SQLite 数据库文件的路径。建议保留为 `prisma/dev.db`。
-    *   `TMDB_API_KEY`: 你的 TMDB API 读取访问令牌或 API Key。
-    *   `TMDB_PROXY_URL`: (可选) 用于 TMDB 请求的代理服务器 URL。
-
-## 数据库设置 (重要)
-
-**本仓库不包含用于缓存数据的数据库文件 (`dev.db`)。**
-
-如果您想使用预先填充好数据的缓存数据库，请执行以下操作：
-
-1.  前往本 GitHub 仓库的 **Releases (发行版)** 页面。
-2.  在最新的 Release 中下载 `db_archive.zip` 压缩包。
-3.  解压 `db_archive.zip` 到项目根目录。解压后，数据库文件应该会自动出现在 `prisma/dev.db`。
-4.  确保你的 `.env` 文件指向了这个位置:
-    ```env
-    DATABASE_URL="file:./prisma/dev.db"
-    ```
-
-## 详细配置与使用 (Configuration & Usage)
-
-### 1. 修改 API 密钥与其他配置
-所有配置都在 `.env` 文件中管理。如果你需要更换 TMDB API Key 或者更改代理设置，只需编辑此文件：
-
-1.  打开项目根目录下的 `.env` 文件。
-2.  **更改 API Key**: 修改 `TMDB_API_KEY` 的值。
-    ```env
-    TMDB_API_KEY="你的_新_API_KEY"
-    ```
-    *如果你发现请求被 TMDB 拒绝或速率限制，建议更换一个新的 Key。*
-
-3.  **更改网络代理**: 如果你的服务器无法直接访问 TMDB，请设置 `TMDB_PROXY_URL`。
-    ```env
-    TMDB_PROXY_URL="http://127.0.0.1:7890" 
-    ```
-    *如果不需要代理，请删除此行或将其留空。*
-
-4.  **修改后重启**: 修改 `.env` 文件后，必须**重启服务器**才能生效。
-
-### 2. 对接媒体服务器 (Client Setup)
-本服务启动后默认监听 `3333` 端口。你需要将你的媒体服务器（如 Emby, Jellyfin, Radarr, Sonarr 等）的 TMDB API 地址指向本服务。
-
-*   **服务地址**: `http://<你的服务器IP>:3333`
-*   **使用方式**:
-    *   本代理完全保留了 TMDB 的 URL 结构。
-    *   原请求: `https://api.themoviedb.org/3/movie/550?api_key=xxx`
-    *   代理请求: `http://localhost:3333/3/movie/550?api_key=xxx`
-
-### 3.启动服务器
-#### 开发模式 (Development)
-启动带有热重载功能的开发服务器:
 ```bash
-npm run dev
+git clone https://github.com/2982136527/TmdbCacheX.git
+cd TmdbCacheX
+npm install
+npx prisma generate
 ```
 
-### 生产环境启动 (Production)
-编译并启动服务器:
+### 配置
+
+首次运行后会在根目录生成 `config.json`，也可通过管理后台在线修改：
+
+```json
+{
+  "tmdb": {
+    "apiKey": "你的 TMDB API Key",
+    "language": "zh-CN",
+    "httpProxy": "",
+    "authKey": "",
+    "proxyImages": true,
+    "resolveTmdbDns": false
+  },
+  "server": {
+    "port": 3333
+  }
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `apiKey` | TMDB API Key（必填） |
+| `language` | 返回语言，默认 `zh-CN` |
+| `httpProxy` | HTTP 代理地址，如 `http://127.0.0.1:7890`（可选） |
+| `authKey` | 自定义鉴权密钥，客户端需传入 `api_key=你的authKey`（可选） |
+| `proxyImages` | 是否代理图片请求 |
+| `resolveTmdbDns` | 是否启用 DNS 覆盖（适用于 DNS 污染环境） |
+
+### 数据库
+
+本仓库不包含缓存数据库文件。如需使用预填充数据：
+
+1. 前往 [Releases](https://github.com/2982136527/TmdbCacheX/releases) 页面下载 `db_archive.zip`
+2. 解压到 `prisma/prisma/dev.db`（Prisma 相对路径解析机制决定的实际位置）
+
+### 启动
+
 ```bash
+# 开发模式（热重载）
+npm run dev
+
+# 生产环境
 npm run start
 ```
 
-### 其他脚本 (Scripts)
--   `npm run prefetch`: 运行预取脚本以填充缓存。
--   `npm run simulate`: 运行模拟脚本。
--   `npm run scrape`: 运行爬虫/抓取脚本。
--   `npm run db:studio`: 打开 Prisma Studio 图形化界面查看数据库。
+启动后访问 `http://localhost:3333` 打开管理后台。
+
+## 对接媒体服务器
+
+代理完全保留 TMDB 的 URL 结构，只需将 API 地址指向本服务：
+
+| 原始请求 | 代理请求 |
+|----------|----------|
+| `https://api.themoviedb.org/3/movie/550?api_key=xxx` | `http://你的IP:3333/3/movie/550?api_key=xxx` |
+
+支持的 API 端点：`movie`、`tv`、`search`、`discover`、`trending`、`genre`、`person`、`collection`、`find`、`configuration` 等。
+
+图片代理：
+- `/t/p/w500/path/to/poster.jpg` — 兼容 Emby 插件（如 StrmAssistant）
+- `/img/w500/path/to/poster.jpg` — 自定义路径
+
+## 其他脚本
+
+| 命令 | 说明 |
+|------|------|
+| `npm run prefetch` | 运行预取脚本填充缓存 |
+| `npm run simulate` | 运行模拟脚本 |
+| `npm run scrape` | 运行爬虫脚本 |
+| `npm run db:studio` | 打开 Prisma Studio 查看数据库 |
 
 ## License
 
