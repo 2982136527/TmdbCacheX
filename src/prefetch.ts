@@ -1,17 +1,10 @@
 
 import axios from 'axios';
-import dotenv from 'dotenv';
-dotenv.config();
+import { config } from './config.js';
 
 // Configuration
 const PROXY_URL = 'http://localhost:3333';
-const API_KEY = process.env.TMDB_API_KEY;
-
-if (!API_KEY) {
-    console.error('Error: TMDB_API_KEY environment variable is required for prefetching.');
-    console.error('Please add TMDB_API_KEY=your_key_here to your .env file');
-    process.exit(1);
-}
+const API_KEY = config.tmdb.apiKey;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -31,7 +24,8 @@ async function prefetchPopularMovies(pagesToFetch: number = 5) {
 
             // 2. Fetch details for each movie
             for (const movie of movies) {
-                const detailsUrl = `${PROXY_URL}/3/movie/${movie.id}?api_key=${API_KEY}&append_to_response=credits,images,videos`;
+                // Don't include append_to_response here; the proxy auto-enriches with the full set
+                const detailsUrl = `${PROXY_URL}/3/movie/${movie.id}?api_key=${API_KEY}`;
 
                 try {
                     await axios.get(detailsUrl);

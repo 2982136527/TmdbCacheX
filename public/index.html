@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TmdbCacheX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --color-bg: #0f172a;
+            --color-bg-secondary: #1e1b4b;
+            --color-brand: #ec4899;
+            --color-accent: #8b5cf6;
+        }
+
+        body {
+            font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+            background: linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
+            background-attachment: fixed;
+            color: #f1f5f9;
+            min-height: 100vh;
+        }
+
+        .glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(8px); }
+        .glass-hover:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+        .brand-gradient { background: linear-gradient(to right, #ec4899, #d946ef); }
+        .text-gradient { background: linear-gradient(to right, #f472b6, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        #particleCanvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+        .custom-select { position: relative; display: inline-block; }
+        .custom-select-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 100px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; color: #cbd5e1; cursor: pointer; user-select: none; transition: all 0.15s; }
+        .custom-select-btn:hover { border-color: rgba(255,255,255,0.15); }
+        .custom-select-btn::after { content: ''; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #94a3b8; flex-shrink: 0; }
+        .custom-select-btn.open::after { border-top: none; border-bottom: 5px solid #94a3b8; }
+        @keyframes dropdownJelly { 0%{transform:scale(0.3);opacity:0} 30%{transform:scale(1.08);opacity:1} 50%{transform:scale(0.94)} 70%{transform:scale(1.03)} 85%{transform:scale(0.98)} 100%{transform:scale(1);opacity:1} }
+        .custom-select-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 100%; background: #1e1b2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; padding: 4px; z-index: 50; box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-height: 240px; overflow-y: auto; transform-origin: top center; transform: scale(0.3); opacity: 0; pointer-events: none; transition: none; }
+        .custom-select-menu.show { transform: scale(1); opacity: 1; pointer-events: auto; animation: dropdownJelly 0.35s ease forwards; }
+        .custom-select-option { padding: 8px 12px; border-radius: 0.5rem; font-size: 0.875rem; color: #cbd5e1; cursor: pointer; transition: all 0.1s; }
+        .custom-select-option:hover { background: rgba(255,255,255,0.08); color: #f1f5f9; }
+        .custom-select-option.selected { background: rgba(236,72,153,0.15); color: #f9a8d4; }
+
+        .tab-active { background: linear-gradient(to right, rgba(236,72,153,0.2), rgba(217,70,239,0.15)); border-color: rgba(236,72,153,0.4); color: #f9a8d4; }
+        .tab-inactive { color: #94a3b8; }
+        .tab-inactive:hover { background: rgba(255,255,255,0.06); color: #f1f5f9; }
+
+        @keyframes jelly { 0%{transform:scale(1)} 15%{transform:scale(0.88)} 35%{transform:scale(1.06)} 55%{transform:scale(0.95)} 70%{transform:scale(1.02)} 85%{transform:scale(0.99)} 100%{transform:scale(1)} }
+        .btn-primary { background: linear-gradient(to right, #ec4899, #d946ef); transition: all 0.15s; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-primary:active { animation: jelly 0.6s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .btn-ghost { border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: #cbd5e1; transition: all 0.15s; }
+        .btn-ghost:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.14); }
+        .btn-ghost:active { animation: jelly 0.6s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .btn-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+
+        input[type="text"], input[type="number"] {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #f1f5f9;
+            border-radius: 12px; padding: 8px 14px; outline: none; transition: all 0.2s;
+        }
+        input:focus { border-color: rgba(236,72,153,0.5); box-shadow: 0 0 0 2px rgba(236,72,153,0.15); }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 500; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        td { padding: 10px 12px; font-size: 13px; color: #cbd5e1; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+        .badge-movie { background: rgba(236,72,153,0.2); color: #f9a8d4; border: 1px solid rgba(236,72,153,0.3); }
+        .badge-tv { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+        .badge-person { background: rgba(16,185,129,0.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+        .badge-list { background: rgba(245,158,11,0.2); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+        .badge-other { background: rgba(148,163,184,0.2); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.3); }
+
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .dot-green { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.5); }
+        .dot-red { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+        .dot-yellow { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.5); }
+
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .poster-card { position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.08); transition: all 0.25s; }
+        .poster-card:hover { border-color: rgba(236,72,153,0.5); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+        .poster-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+        .poster-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 40%, transparent 70%); opacity: 0; transition: opacity 0.25s; display: flex; flex-direction: column; justify-content: flex-end; padding: 10px; }
+        .poster-card:hover .poster-overlay { opacity: 1; }
+        .poster-badge { position: absolute; top: 6px; left: 6px; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; backdrop-filter: blur(8px); }
+        .poster-badge-movie { background: rgba(236,72,153,0.8); color: #fff; }
+        .poster-badge-tv { background: rgba(59,130,246,0.8); color: #fff; }
+        .poster-rating { position: absolute; top: 6px; right: 6px; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; background: rgba(0,0,0,0.7); color: #fbbf24; backdrop-filter: blur(8px); }
+        .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 12px; aspect-ratio: 2/3; }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal-backdrop.active { opacity: 1; pointer-events: auto; }
+        .modal-box { position: relative; width: 90vw; max-width: 900px; max-height: 90vh; overflow-y: auto; background: linear-gradient(135deg, rgba(30,27,75,0.95), rgba(15,23,42,0.98)); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; backdrop-filter: blur(20px); transform: translateY(20px) scale(0.97); transition: transform 0.3s; scrollbar-width: none; -ms-overflow-style: none; }
+        .modal-box::-webkit-scrollbar { display: none; }
+        .modal-backdrop.active .modal-box { transform: translateY(0) scale(1); }
+        .modal-close { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; z-index: 10; }
+        .modal-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+        .modal-hero { position: relative; height: 420px; overflow: hidden; border-radius: 20px 20px 0 0; }
+        .modal-hero img { width: 100%; height: 100%; object-fit: cover; }
+        .modal-hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,23,42,1) 0%, rgba(15,23,42,0.6) 50%, transparent 100%); }
+        .modal-poster-float { position: absolute; bottom: 20px; left: 24px; width: 130px; border-radius: 12px; overflow: hidden; border: 2px solid rgba(255,255,255,0.15); box-shadow: 0 8px 30px rgba(0,0,0,0.5); z-index: 5; }
+        .modal-poster-float img { width: 100%; display: block; }
+        .cast-card { flex-shrink: 0; width: 80px; text-align: center; }
+        .cast-card img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.1); margin: 0 auto 6px; }
+        .backdrop-thumb { flex-shrink: 0; width: 200px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+        .backdrop-thumb img { width: 100%; display: block; }
+        .genre-chip { display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 11px; background: rgba(236,72,153,0.15); color: #f9a8d4; border: 1px solid rgba(236,72,153,0.25); }
+        .season-card { border: 1px solid transparent; }
+        .season-card.active { border-color: rgba(236,72,153,0.5); background: rgba(236,72,153,0.08); }
+        .episode-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .episode-row:last-child { border-bottom: none; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+    <canvas id="particleCanvas"></canvas>
+
+    <div class="relative z-10 max-w-6xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-black tracking-wider text-gradient" style="font-family:'Orbitron',sans-serif">TmdbCacheX</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="statusDot" class="dot dot-green"></span>
+                <span id="statusText" class="text-xs text-slate-400">运行中</span>
+                <a href="/" class="btn-ghost rounded-xl px-3 py-1.5 text-xs transition-all">返回代理</a>
+            </div>
+        </header>
+
+        <!-- Stats Panel -->
+        <div class="glass rounded-2xl p-5 mb-6 fade-in">
+            <div class="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-0 divide-x divide-white/[0.06]">
+                <div class="px-4 first:pl-0 last:pr-0">
+                    <div class="text-[10px] text-slate-500 mb-1">缓存总数</div>
+                    <div class="text-lg font-bold text-white" id="statTotal">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">有效缓存</div>
+                    <div class="text-lg font-bold text-emerald-400" id="statActive">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">已过期</div>
+                    <div class="text-lg font-bold text-amber-400" id="statExpired">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">Warmer</div>
+                    <div class="text-sm font-bold" id="statWarmer">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">总调用</div>
+                    <div class="text-lg font-bold text-white" id="statApiTotal">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">今日调用</div>
+                    <div class="text-lg font-bold text-emerald-400" id="statApiToday">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">命中率</div>
+                    <div class="text-lg font-bold text-pink-400" id="statApiHitRate">-</div>
+                </div>
+                <div class="px-4">
+                    <div class="text-[10px] text-slate-500 mb-1">外部调用</div>
+                    <div class="text-lg font-bold text-violet-400" id="statApiExternal">-</div>
+                </div>
+                <div class="px-4 last:pr-0">
+                    <div class="text-[10px] text-slate-500 mb-1">数据库</div>
+                    <div class="text-lg font-bold text-sky-400" id="statDbSize">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex items-center gap-1 p-1 rounded-full border border-white/[0.07] bg-black/10 mb-6 w-fit">
+            <button class="tab-btn tab-active rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="cache">缓存管理</button>
+            <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="posters">缓存预览</button>
+            <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="warmer">Warmer 控制</button>
+            <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="logs">调用日志</button>
+            <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="config">配置</button>
+            <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="docs">API 文档</button>
+        </div>
+
+        <!-- Tab: Cache Management -->
+        <div id="tab-cache" class="tab-content fade-in">
+            <div class="glass rounded-2xl p-6">
+                <!-- Search & Actions -->
+                <div class="flex flex-wrap items-center gap-3 mb-5">
+                    <input type="text" id="cacheSearch" placeholder="搜索 URL..." class="flex-1 min-w-[200px] text-sm">
+                    <select id="cacheTypeFilter" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none">
+                        <option value="">全部类型</option>
+                        <option value="movie">电影</option>
+                        <option value="tv">电视剧</option>
+                        <option value="person">人物</option>
+                    </select>
+                    <button onclick="loadCache()" class="btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white transition-all">搜索</button>
+                </div>
+
+                <!-- Table -->
+                <div class="overflow-x-auto scrollbar-thin">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>类型</th>
+                                <th>URL</th>
+                                <th>更新时间</th>
+                                <th>过期时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cacheTable"></tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex items-center justify-between mt-5">
+                    <span class="text-xs text-slate-500" id="cacheInfo">-</span>
+                    <div class="flex items-center gap-2" id="cachePagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Poster Wall -->
+        <div id="tab-posters" class="tab-content fade-in hidden">
+            <div class="glass rounded-2xl p-6">
+                <div class="flex flex-wrap items-center gap-3 mb-5">
+                    <input type="text" id="posterSearchInput" placeholder="搜索标题..." onkeydown="if(event.key==='Enter')loadPosters(1)" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none w-48 placeholder:text-slate-600">
+                    <select id="posterTypeFilter" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none">
+                        <option value="all">全部</option>
+                        <option value="movie">电影</option>
+                        <option value="tv">电视剧</option>
+                    </select>
+                    <button onclick="loadPosters(1)" class="btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white transition-all">搜索</button>
+                </div>
+                <div id="posterGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3"></div>
+                <div class="flex items-center justify-between mt-5">
+                    <span class="text-xs text-slate-500" id="posterInfo">-</span>
+                    <div class="flex items-center gap-2" id="posterPagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Warmer Control -->
+        <div id="tab-warmer" class="tab-content fade-in hidden">
+            <div class="glass rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white mb-1">Cache Warmer</h3>
+                        <p class="text-sm text-slate-400">自动预热缓存，减少首次请求延迟</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="warmerDot" class="dot dot-green"></span>
+                        <span id="warmerStatus" class="text-sm text-slate-300">运行中</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="glass rounded-xl p-4">
+                        <h4 class="text-sm font-medium text-slate-300 mb-2">热循环 (Hot Loop)</h4>
+                        <p class="text-xs text-slate-500 mb-3">每 4 小时更新热门内容</p>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="badge badge-movie">popular</span>
+                            <span class="badge badge-movie">now_playing</span>
+                            <span class="badge badge-movie">top_rated</span>
+                            <span class="badge badge-movie">upcoming</span>
+                            <span class="badge badge-tv">tv/popular</span>
+                            <span class="badge badge-tv">tv/top_rated</span>
+                            <span class="badge badge-tv">tv/on_the_air</span>
+                            <span class="badge badge-tv">tv/airing_today</span>
+                            <span class="badge badge-list">trending</span>
+                        </div>
+                    </div>
+                    <div class="glass rounded-xl p-4">
+                        <h4 class="text-sm font-medium text-slate-300 mb-2">冷循环 (Cold Loop)</h4>
+                        <p class="text-xs text-slate-500 mb-3">逐年爬取全量历史数据 (1880-至今)</p>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="badge badge-movie">discover/movie</span>
+                            <span class="badge badge-tv">discover/tv</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="btnStopWarmer" onclick="stopWarmer()" class="btn-ghost rounded-xl px-5 py-2.5 text-sm text-amber-400 hover:text-amber-300">暂停 Warmer</button>
+                    <button id="btnStartWarmer" onclick="startWarmer()" class="btn-primary rounded-xl px-5 py-2.5 text-sm font-medium text-white">启动 Warmer</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Logs -->
+        <div id="tab-logs" class="tab-content fade-in hidden">
+            <!-- Top Items -->
+            <div class="glass rounded-2xl p-6 mb-6">
+                <h3 class="text-sm font-semibold text-slate-300 mb-3">热门影片 TOP 10</h3>
+                <div id="logTopItems" class="text-sm text-slate-400">-</div>
+            </div>
+
+            <!-- Log Table -->
+            <div class="glass rounded-2xl p-6">
+                <div class="flex flex-wrap items-center gap-3 mb-5">
+                    <select id="logTypeFilter" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none">
+                        <option value="">全部类型</option>
+                        <option value="movie">电影</option>
+                        <option value="tv">电视剧</option>
+                        <option value="person">人物</option>
+                        <option value="list">列表</option>
+                    </select>
+                    <select id="logSourceFilter" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none">
+                        <option value="">全部来源</option>
+                        <option value="external">外部调用</option>
+                        <option value="internal">内部调用</option>
+                    </select>
+                    <button onclick="loadLogs(1)" class="btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white transition-all">筛选</button>
+                    <button onclick="clearLogs()" class="btn-ghost rounded-xl px-4 py-2 text-sm transition-all text-red-400 hover:text-red-300">清空日志</button>
+                </div>
+
+                <div class="overflow-x-auto scrollbar-thin">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>标题</th>
+                                <th>类型</th>
+                                <th>IP</th>
+                                <th>设备</th>
+                                <th>来源</th>
+                                <th>命中</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logTable"></tbody>
+                    </table>
+                </div>
+
+                <div class="flex items-center justify-between mt-5">
+                    <span class="text-xs text-slate-500" id="logInfo">-</span>
+                    <div class="flex items-center gap-2" id="logPagination"></div>
+                </div>
+            </div>
+
+            <!-- Retention Settings -->
+            <div class="glass rounded-2xl p-6 mt-6">
+                <h3 class="text-sm font-semibold text-slate-300 mb-4">日志保留策略</h3>
+                <div class="flex items-center gap-3">
+                    <label class="text-xs text-slate-400">保留天数（0 = 永久）</label>
+                    <input type="number" id="logRetentionInput" min="0" max="3650" class="w-24 text-sm font-mono">
+                    <button onclick="saveLogRetention()" class="btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white transition-all">保存</button>
+                    <span id="logRetentionResult" class="text-xs hidden"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Config -->
+        <div id="tab-config" class="tab-content fade-in hidden">
+            <div class="glass rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-6">配置</h3>
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2">TMDB API Key</label>
+                        <input type="text" id="configApiKeyInput" placeholder="输入你的 TMDB API Key" class="w-full text-sm font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2">语言</label>
+                        <select id="configLangInput" class="w-full text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/20">
+                            <option value="zh-CN">简体中文 (zh-CN)</option>
+                            <option value="zh-TW">繁體中文 (zh-TW)</option>
+                            <option value="en-US">English (en-US)</option>
+                            <option value="ja-JP">日本語 (ja-JP)</option>
+                            <option value="ko-KR">한국어 (ko-KR)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2">HTTP 代理（可选）</label>
+                        <input type="text" id="configProxyInput" placeholder="http://127.0.0.1:7890" class="w-full text-sm font-mono">
+                        <p class="text-[10px] text-slate-600 mt-1">用于访问 TMDB API 的网络代理，留空表示不使用。格式：http://host:port</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2">认证密钥（可选）</label>
+                        <input type="text" id="configAuthKeyInput" placeholder="留空表示不需要认证" class="w-full text-sm font-mono">
+                        <p class="text-[10px] text-slate-600 mt-1">设置后，客户端需在 api_key 参数填入此密钥才能使用代理。适用于 StrmAssistant 等插件。</p>
+                    </div>
+                    <div class="flex items-center justify-between py-2">
+                        <div>
+                            <label class="text-xs text-slate-400">代理图片</label>
+                            <p class="text-[10px] text-slate-600 mt-0.5">开启后图片通过本服务代理获取，关闭则返回 TMDB 原始图片地址</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="configProxyImagesInput" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500/80"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between py-2">
+                        <div>
+                            <label class="text-xs text-slate-400">DNS 覆盖</label>
+                            <p class="text-[10px] text-slate-600 mt-0.5">通过外部 DNS 解析 TMDB 域名，适用于 DNS 污染但能访问境外 DNS 的用户</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="testDns()" id="dnsTestBtn" class="rounded-lg px-3 py-1.5 text-xs transition-all border border-white/[0.08] text-slate-400 hover:text-white hover:border-white/20">检测</button>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="configResolveDnsInput" class="sr-only peer">
+                                <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500/80"></div>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="dnsTestResult" class="hidden -mt-1 mb-2">
+                        <div class="bg-black/20 rounded-xl p-3 text-xs font-mono space-y-1" id="dnsTestOutput"></div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2">服务端口</label>
+                        <input type="number" id="configPortInput" placeholder="3333" min="1" max="65535" class="w-full text-sm font-mono">
+                    </div>
+                    <div class="flex items-center gap-3 pt-2">
+                        <button onclick="saveConfig()" class="btn-primary rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-all">保存配置</button>
+                        <span class="text-xs text-slate-500">API Key 和语言即时生效，端口需重启</span>
+                    </div>
+                </div>
+                <div id="configSaveResult" class="mt-4 hidden"></div>
+
+                <div class="border-t border-white/[0.06] mt-6 pt-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-medium text-slate-300">清空缓存</h4>
+                            <p class="text-[11px] text-slate-500 mt-0.5">删除所有已缓存的 TMDB 数据，下次请求将重新从 TMDB 获取</p>
+                        </div>
+                        <button onclick="confirmClearCache()" class="rounded-xl px-4 py-2 text-sm transition-all border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50">清空缓存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: API Docs -->
+        <div id="tab-docs" class="tab-content fade-in hidden">
+            <div class="glass rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-6">API 文档</h3>
+
+                <div class="space-y-6 text-sm text-slate-300 leading-relaxed">
+                    <!-- Overview -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">简介</h4>
+                        <p>TmdbCacheX 是一个 TMDB API 缓存代理服务。将请求转发至 TMDB API 并自动缓存响应，减少重复调用，提升刮削速度。兼容所有支持自定义 TMDB API 地址的客户端（Emby、Jellyfin、Kodi 等）。</p>
+                    </div>
+
+                    <!-- Base URL -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">Base URL</h4>
+                        <div class="bg-black/30 rounded-xl p-4 font-mono text-xs text-emerald-400" id="docsBaseUrl">http://你的服务器IP:3333</div>
+                        <p class="text-[11px] text-slate-500 mt-1">将客户端的 TMDB API 地址改为以上地址即可。</p>
+                    </div>
+
+                    <!-- Supported Endpoints -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">支持的 API 端点</h4>
+                        <div class="bg-black/30 rounded-xl p-4 font-mono text-xs space-y-1.5">
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/movie/{id}</span> <span class="text-slate-500">— 电影详情（自动附带 credits、images、videos 等）</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/tv/{id}</span> <span class="text-slate-500">— 剧集详情（自动附带 credits、images、seasons 等）</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/person/{id}</span> <span class="text-slate-500">— 人物详情</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/search/movie?query=xxx</span> <span class="text-slate-500">— 搜索电影</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/search/tv?query=xxx</span> <span class="text-slate-500">— 搜索剧集</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/discover/movie</span> <span class="text-slate-500">— 发现电影</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/discover/tv</span> <span class="text-slate-500">— 发现剧集</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/trending/{media_type}/{time_window}</span> <span class="text-slate-500">— 热门趋势</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/movie/popular|top_rated|now_playing|upcoming</span> <span class="text-slate-500">— 电影列表</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/tv/popular|top_rated|on_the_air|airing_today</span> <span class="text-slate-500">— 剧集列表</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/genre/movie|tv/list</span> <span class="text-slate-500">— 分类列表</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/collection/{id}</span> <span class="text-slate-500">— 系列合集</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/find/{external_id}</span> <span class="text-slate-500">— 外部 ID 查找</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/3/configuration</span> <span class="text-slate-500">— TMDB 配置信息</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Image Proxy -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">图片代理</h4>
+                        <div class="bg-black/30 rounded-xl p-4 font-mono text-xs space-y-1.5">
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/img/{size}{image_path}</span> <span class="text-slate-500">— 自定义路径</span></div>
+                            <div><span class="text-emerald-400">GET</span> <span class="text-slate-300">/t/p/{size}{image_path}</span> <span class="text-slate-500">— 兼容 Emby 插件（如 StrmAssistant）</span></div>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-2">两个路径功能相同，都会代理从 <code class="text-pink-400">image.tmdb.org</code> 获取图片。</p>
+                        <p class="text-[11px] text-slate-500 mt-1">示例：<code class="text-pink-400">/t/p/w500/path/to/poster.jpg</code> 或 <code class="text-pink-400">/img/w500/path/to/poster.jpg</code></p>
+                        <p class="text-[11px] text-slate-500 mt-1">常用尺寸：w92, w154, w185, w300, w500, w780, original</p>
+                        <p class="text-[11px] text-yellow-500/80 mt-2">• 配置页的「代理图片」开关控制 API 返回的图片链接格式：开启时返回 <code class="text-pink-400">/img/...</code>（经本服务代理），关闭时返回 <code class="text-pink-400">https://image.tmdb.org/t/p/...</code>（客户端直连 TMDB）。</p>
+                        <p class="text-[11px] text-yellow-500/80 mt-1">• 管理后台自身的图片预览不受此开关影响，始终通过本服务代理获取。</p>
+                    </div>
+
+                    <!-- Auto Enrichment -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">自动数据增强</h4>
+                        <p>请求电影或剧集详情时，代理会自动附加以下数据，无需手动指定 <code class="text-pink-400">append_to_response</code>：</p>
+                        <div class="bg-black/30 rounded-xl p-4 font-mono text-xs text-slate-400 mt-2">
+                            credits, images, videos, external_ids, recommendations,<br>
+                            similar, keywords, watch/providers, release_dates,<br>
+                            content_ratings, aggregate_credits
+                        </div>
+                    </div>
+
+                    <!-- Cache Strategy -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">缓存策略</h4>
+                        <ul class="list-disc list-inside space-y-1 text-slate-400">
+                            <li>缓存有效期：<strong class="text-white">7 天</strong></li>
+                            <li>相同 URL 请求在有效期内直接返回缓存，不会请求 TMDB</li>
+                            <li>请求列表页时，自动在后台预取详情页（prefetch）</li>
+                            <li>Warmer 自动定期抓取热门/趋势内容保持缓存新鲜</li>
+                        </ul>
+                    </div>
+
+                    <!-- Emby Setup -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">客户端配置示例</h4>
+
+                        <div class="mb-4">
+                            <h5 class="text-slate-200 font-medium mb-1.5">Emby + StrmAssistant 插件</h5>
+                            <p class="text-slate-400 mb-2">安装 <a href="https://github.com/sjtuross/StrmAssistant" target="_blank" class="text-pink-400 hover:underline">StrmAssistant</a> 插件后，可同时代理 API 和图片：</p>
+                            <ol class="list-decimal list-inside space-y-1 text-slate-400">
+                                <li>安装 StrmAssistant 插件</li>
+                                <li>进入插件设置，找到「替代 TMDB 配置」</li>
+                                <li>替代 API 地址填：<code class="text-pink-400" id="docsEmbyApiUrl">http://你的服务器IP:3333</code></li>
+                                <li>替代图片地址填：<code class="text-pink-400" id="docsEmbyImgUrl">http://你的服务器IP:3333</code></li>
+                                <li>API 密钥留空（使用系统默认）或填入你自己的 Key</li>
+                            </ol>
+                            <p class="text-[11px] text-slate-500 mt-1.5">元数据和图片都通过缓存代理，适合无法直接访问 TMDB 的网络环境。</p>
+                        </div>
+
+                        <div class="mb-4">
+                            <h5 class="text-slate-200 font-medium mb-1.5">curl 测试</h5>
+                            <div class="bg-black/30 rounded-xl p-4 font-mono text-xs text-emerald-400" id="docsCurlExample">
+                                curl http://你的服务器IP:3333/3/movie/550?api_key=YOUR_KEY
+                            </div>
+                        </div>
+
+                        <div>
+                            <h5 class="text-slate-200 font-medium mb-1.5">请求格式</h5>
+                            <p class="text-slate-400">所有请求格式与 TMDB API 完全一致，只需将 <code class="text-pink-400">api.themoviedb.org</code> 替换为本服务地址。<code class="text-pink-400">api_key</code> 参数仍需传入你的 TMDB API Key。</p>
+                        </div>
+                    </div>
+
+                    <!-- Auth Key -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">认证密钥</h4>
+                        <p>可在配置页设置「认证密钥」，设置后客户端的 <code class="text-pink-400">api_key</code> 参数必须匹配此密钥才能使用代理。适用于 StrmAssistant 等插件：</p>
+                        <ol class="list-decimal list-inside space-y-1 text-slate-400 mt-2">
+                            <li>在配置页设置一个认证密钥（如 <code class="text-pink-400">my-secret-key</code>）</li>
+                            <li>在 StrmAssistant 的「API 密钥」栏填入此密钥</li>
+                            <li>代理收到请求后验证密钥，通过后自动替换为真实的 TMDB Key 请求 TMDB</li>
+                        </ol>
+                        <p class="text-[11px] text-yellow-500/80 mt-2">• 未开启认证时：无论客户端填入什么密钥（包括插件自带的 TMDB Key），代理都会自动替换为本项目的真实 TMDB Key，无需额外配置即可正常使用。</p>
+                        <p class="text-[11px] text-yellow-500/80 mt-1">• 开启认证后：只有填写了认证密钥的请求才能通过。即使客户端填入了真实的 TMDB Key 也会被拒绝（返回 401），以防止绕过认证。</p>
+                    </div>
+
+                    <!-- DNS Override -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">DNS 覆盖</h4>
+                        <p>适用于因 DNS 污染无法访问 TMDB 的用户。开启后，服务端通过外部 DNS（8.8.8.8 / 1.1.1.1）解析 TMDB 域名，绕过本地 DNS 污染。</p>
+                        <ul class="list-disc list-inside space-y-1 text-slate-400 mt-2">
+                            <li>配置页提供「检测」按钮，可提前验证你的网络是否支持</li>
+                            <li>检测三项：DNS 服务器可达性、域名解析、TCP 连接</li>
+                            <li>三项全部通过才能正常使用</li>
+                            <li>解析结果缓存 5 分钟，不影响性能</li>
+                        </ul>
+                        <p class="text-[11px] text-yellow-500/80 mt-2">• 如果检测未通过，说明你的网络无法直连 TMDB 服务器，需要使用 HTTP 代理。</p>
+                        <p class="text-[11px] text-yellow-500/80 mt-1">• DNS 覆盖和 HTTP 代理可以同时开启，互不冲突。</p>
+                    </div>
+
+                    <!-- Notes -->
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">注意事项</h4>
+                        <ul class="list-disc list-inside space-y-1 text-slate-400">
+                            <li>缓存代理仅支持 GET 请求</li>
+                            <li>如需在内网使用图片代理，请确保客户端能访问本服务的 <code class="text-pink-400">/img/*</code> 或 <code class="text-pink-400">/t/p/*</code> 端点</li>
+                            <li>HTTP 代理设置对所有 TMDB API 请求和图片请求生效</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+        <div class="modal-box scrollbar-thin">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Custom Select ---
+        function initCustomSelect(selectEl) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'custom-select';
+            selectEl.parentNode.insertBefore(wrapper, selectEl);
+            wrapper.appendChild(selectEl);
+            selectEl.style.display = 'none';
+
+            const btn = document.createElement('div');
+            btn.className = 'custom-select-btn';
+            btn.textContent = selectEl.options[selectEl.selectedIndex]?.text || '';
+            wrapper.appendChild(btn);
+
+            const menu = document.createElement('div');
+            menu.className = 'custom-select-menu';
+            wrapper.appendChild(menu);
+
+            function renderOptions() {
+                menu.innerHTML = '';
+                for (const opt of selectEl.options) {
+                    const item = document.createElement('div');
+                    item.className = 'custom-select-option' + (opt.selected ? ' selected' : '');
+                    item.textContent = opt.text;
+                    item.dataset.value = opt.value;
+                    item.onclick = () => {
+                        selectEl.value = opt.value;
+                        btn.textContent = opt.text;
+                        menu.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+                        item.classList.add('selected');
+                        menu.classList.remove('show');
+                        btn.classList.remove('open');
+                        selectEl.dispatchEvent(new Event('change'));
+                    };
+                    menu.appendChild(item);
+                }
+            }
+            renderOptions();
+
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const isOpen = menu.classList.contains('show');
+                document.querySelectorAll('.custom-select-menu.show').forEach(m => m.classList.remove('show'));
+                document.querySelectorAll('.custom-select-btn.open').forEach(b => b.classList.remove('open'));
+                if (!isOpen) { menu.classList.add('show'); btn.classList.add('open'); }
+            };
+
+            // Sync when select value changes externally
+            const observer = new MutationObserver(() => { btn.textContent = selectEl.options[selectEl.selectedIndex]?.text || ''; });
+            observer.observe(selectEl, { attributes: true, childList: true, subtree: true });
+
+            return { update: renderOptions, getValue: () => selectEl.value };
+        }
+
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.custom-select-menu.show').forEach(m => m.classList.remove('show'));
+            document.querySelectorAll('.custom-select-btn.open').forEach(b => b.classList.remove('open'));
+        });
+
+        // --- State ---
+        let currentPage = 1;
+        let currentTab = 'cache';
+
+        // --- API Helpers ---
+        async function api(path, opts = {}) {
+            const headers = {};
+            if (opts.body) headers['Content-Type'] = 'application/json';
+            const res = await fetch(`/admin/api${path}`, {
+                headers,
+                ...opts,
+            });
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            return res.json();
+        }
+
+        // --- Tab Switching ---
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    b.classList.remove('tab-active');
+                    b.classList.add('tab-inactive');
+                });
+                btn.classList.remove('tab-inactive');
+                btn.classList.add('tab-active');
+
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+                const target = document.getElementById(`tab-${tab}`);
+                target.classList.remove('hidden');
+                target.classList.remove('fade-in');
+                void target.offsetWidth;
+                target.classList.add('fade-in');
+                currentTab = tab;
+
+                if (tab === 'config') loadConfig();
+                if (tab === 'logs') { loadTopItems(); loadLogs(1); loadLogRetention(); }
+                if (tab === 'posters') loadPosters(1);
+            });
+        });
+
+        // --- Stats ---
+        async function loadStats() {
+            try {
+                const [stats, logStats] = await Promise.all([
+                    api('/stats'),
+                    api('/logs/stats'),
+                ]);
+                document.getElementById('statTotal').textContent = stats.total.toLocaleString();
+                document.getElementById('statActive').textContent = stats.active.toLocaleString();
+                document.getElementById('statExpired').textContent = stats.expired.toLocaleString();
+                document.getElementById('statWarmer').innerHTML = `<span class="flex items-center gap-1"><span class="dot ${stats.uptime ? 'dot-green' : 'dot-yellow'}"></span>${stats.uptime.hours}h ${stats.uptime.minutes}m</span>`;
+                document.getElementById('statApiTotal').textContent = logStats.total.toLocaleString();
+                document.getElementById('statApiToday').textContent = logStats.today.toLocaleString();
+                document.getElementById('statApiHitRate').textContent = logStats.hitRate + '%';
+                document.getElementById('statApiExternal').textContent = logStats.external.toLocaleString();
+                const dbMB = (stats.dbSize / 1048576).toFixed(1);
+                document.getElementById('statDbSize').textContent = dbMB + ' MB';
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        }
+
+        // --- Cache ---
+        async function loadCache(page = 1) {
+            currentPage = page;
+            const search = document.getElementById('cacheSearch').value;
+            const type = document.getElementById('cacheTypeFilter').value;
+
+            try {
+                const data = await api(`/cache?page=${page}&limit=15&search=${encodeURIComponent(search)}&type=${type}`);
+
+                const tbody = document.getElementById('cacheTable');
+                if (data.items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">暂无数据</td></tr>`;
+                } else {
+                    tbody.innerHTML = data.items.map(item => {
+                        const type = getType(item.url);
+                        const badgeClass = type === 'movie' ? 'badge-movie' : type === 'tv' ? 'badge-tv' : type === 'person' ? 'badge-person' : type === 'list' ? 'badge-list' : 'badge-other';
+                        return `<tr>
+                            <td><span class="badge ${badgeClass}">${type}</span></td>
+                            <td class="max-w-[300px] truncate font-mono text-xs" title="${item.url}">${item.url}</td>
+                            <td class="text-xs">${formatDate(item.updatedAt)}</td>
+                            <td class="text-xs">${formatDate(item.expiresAt)}</td>
+                            <td><button onclick="deleteCache(${item.id})" class="text-xs text-red-400 hover:text-red-300 transition-colors">删除</button></td>
+                        </tr>`;
+                    }).join('');
+                }
+
+                document.getElementById('cacheInfo').textContent = `共 ${data.total} 条，第 ${data.page}/${data.totalPages} 页`;
+                renderPagination(data.page, data.totalPages);
+            } catch (e) {
+                console.error('Failed to load cache:', e);
+            }
+        }
+
+        function renderPagination(page, totalPages) {
+            const container = document.getElementById('cachePagination');
+            let html = '';
+            if (page > 1) html += `<button onclick="loadCache(${page - 1})" class="btn-ghost rounded-lg px-3 py-1.5 text-xs transition-all">上一页</button>`;
+            if (page < totalPages) html += `<button onclick="loadCache(${page + 1})" class="btn-ghost rounded-lg px-3 py-1.5 text-xs transition-all">下一页</button>`;
+            container.innerHTML = html;
+        }
+
+        async function deleteCache(id) {
+            if (!confirm('确定删除这条缓存？')) return;
+            try {
+                await api(`/cache/${id}`, { method: 'DELETE' });
+                loadCache(currentPage);
+                loadStats();
+            } catch (e) {
+                alert('删除失败');
+            }
+        }
+
+        function confirmClearCache() {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center';
+            overlay.innerHTML = `
+                <div class="glass rounded-2xl p-6 max-w-sm w-full mx-4 text-center">
+                    <div class="text-3xl mb-3">⚠️</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">确认清空缓存？</h3>
+                    <p class="text-sm text-slate-400 mb-6">此操作将删除所有已缓存的 TMDB 数据，不可恢复。</p>
+                    <div class="flex gap-3 justify-center">
+                        <button onclick="this.closest('.fixed').remove()" class="px-5 py-2 rounded-xl text-sm text-slate-300 border border-white/10 hover:bg-white/5 transition-all">取消</button>
+                        <button id="confirmClearBtn" class="px-5 py-2 rounded-xl text-sm text-white bg-red-500/80 hover:bg-red-500 transition-all">确认清空</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+            document.getElementById('confirmClearBtn').onclick = async () => {
+                overlay.remove();
+                try {
+                    const result = await api('/cache', { method: 'DELETE' });
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed top-6 right-6 z-50 glass rounded-xl px-4 py-3 text-sm text-emerald-400';
+                    toast.textContent = `已清空 ${result.deleted} 条缓存`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
+                    loadCache(1);
+                    loadStats();
+                } catch (e) {
+                    alert('清空失败');
+                }
+            };
+        }
+
+        // --- Warmer ---
+        async function loadWarmerStatus() {
+            try {
+                const data = await api('/warmer/status');
+                const running = data.running;
+                document.getElementById('warmerDot').className = `dot ${running ? 'dot-green' : 'dot-red'}`;
+                document.getElementById('warmerStatus').textContent = running ? '运行中' : '已停止';
+                document.getElementById('statWarmer').innerHTML = `<span class="flex items-center gap-1"><span class="dot ${running ? 'dot-green' : 'dot-red'}"></span>${running ? '运行中' : '已停止'}</span>`;
+                const btnStop = document.getElementById('btnStopWarmer');
+                const btnStart = document.getElementById('btnStartWarmer');
+                if (running) {
+                    btnStop.classList.remove('btn-disabled');
+                    btnStart.classList.add('btn-disabled');
+                } else {
+                    btnStop.classList.add('btn-disabled');
+                    btnStart.classList.remove('btn-disabled');
+                }
+                btnStop.textContent = '暂停 Warmer';
+                btnStart.textContent = '启动 Warmer';
+            } catch (e) {
+                console.error('Failed to load warmer status:', e);
+            }
+        }
+
+        async function stopWarmer() {
+            const btn = document.getElementById('btnStopWarmer');
+            const orig = btn.textContent;
+            btn.textContent = '处理中...';
+            btn.classList.add('btn-disabled');
+            try {
+                await api('/warmer/stop', { method: 'POST' });
+                loadWarmerStatus();
+            } catch (e) {
+                alert('操作失败');
+                btn.textContent = orig;
+                btn.classList.remove('btn-disabled');
+            }
+        }
+
+        async function startWarmer() {
+            const btn = document.getElementById('btnStartWarmer');
+            const orig = btn.textContent;
+            btn.textContent = '处理中...';
+            btn.classList.add('btn-disabled');
+            try {
+                await api('/warmer/start', { method: 'POST' });
+                loadWarmerStatus();
+            } catch (e) {
+                alert('操作失败');
+                btn.textContent = orig;
+                btn.classList.remove('btn-disabled');
+            }
+        }
+
+        // --- Logs ---
+        let logPage = 1;
+
+        async function loadTopItems() {
+            try {
+                const data = await api('/logs/stats');
+                const topEl = document.getElementById('logTopItems');
+                if (data.topItems.length === 0) {
+                    topEl.textContent = '暂无数据';
+                } else {
+                    topEl.innerHTML = data.topItems.map((item, i) =>
+                        `<div class="flex items-center gap-3 py-1.5 ${i < 3 ? 'text-white' : ''}">
+                            <span class="text-xs w-5 text-right ${i < 3 ? 'text-pink-400 font-bold' : 'text-slate-500'}">${i + 1}</span>
+                            <span class="flex-1 truncate">${item.title}</span>
+                            <span class="text-xs text-slate-500">${item.count} 次</span>
+                        </div>`
+                    ).join('');
+                }
+            } catch (e) {}
+        }
+
+        async function loadLogs(page = 1) {
+            logPage = page;
+            const type = document.getElementById('logTypeFilter').value;
+            const source = document.getElementById('logSourceFilter').value;
+            try {
+                const data = await api(`/logs?page=${page}&limit=20&type=${type}&source=${source}`);
+                const tbody = document.getElementById('logTable');
+                if (data.items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500">暂无日志</td></tr>';
+                } else {
+                    tbody.innerHTML = data.items.map(item => {
+                        const badgeClass = item.type === 'movie' ? 'badge-movie' : item.type === 'tv' ? 'badge-tv' : item.type === 'person' ? 'badge-person' : item.type === 'list' ? 'badge-list' : 'badge-other';
+                        const device = parseUA(item.ua);
+                        return `<tr>
+                            <td class="text-xs whitespace-nowrap">${formatDate(item.createdAt)}</td>
+                            <td class="max-w-[200px] truncate font-mono text-xs" title="${item.url}">${item.title || item.url}</td>
+                            <td>${item.type ? `<span class="badge ${badgeClass}">${item.type}</span>` : '-'}</td>
+                            <td class="text-xs text-slate-400 font-mono">${item.ip || '-'}</td>
+                            <td class="text-xs text-slate-400 max-w-[150px] truncate" title="${item.ua || ''}">${device}</td>
+                            <td><span class="text-xs ${item.source === 'external' ? 'text-emerald-400' : 'text-slate-500'}">${item.source === 'external' ? '外部' : '内部'}</span></td>
+                            <td><span class="text-xs ${item.hit ? 'text-emerald-400' : 'text-amber-400'}">${item.hit ? '命中' : '未中'}</span></td>
+                        </tr>`;
+                    }).join('');
+                }
+                document.getElementById('logInfo').textContent = `共 ${data.total} 条，第 ${data.page}/${data.totalPages} 页`;
+                renderLogPagination(data.page, data.totalPages);
+            } catch (e) {
+                console.error('Failed to load logs:', e);
+            }
+        }
+
+        function renderLogPagination(page, totalPages) {
+            const container = document.getElementById('logPagination');
+            let html = '';
+            if (page > 1) html += `<button onclick="loadLogs(${page - 1})" class="btn-ghost rounded-lg px-3 py-1.5 text-xs transition-all">上一页</button>`;
+            if (page < totalPages) html += `<button onclick="loadLogs(${page + 1})" class="btn-ghost rounded-lg px-3 py-1.5 text-xs transition-all">下一页</button>`;
+            container.innerHTML = html;
+        }
+
+        async function clearLogs() {
+            if (!confirm('确定清空所有日志？')) return;
+            try {
+                const result = await api('/logs', { method: 'DELETE' });
+                alert(`已清空 ${result.deleted} 条日志`);
+                loadLogs(1);
+                loadTopItems();
+            } catch (e) {
+                alert('清空失败');
+            }
+        }
+
+        async function loadLogRetention() {
+            try {
+                const data = await api('/config/raw');
+                document.getElementById('logRetentionInput').value = data.logRetentionDays ?? 7;
+            } catch (e) {}
+        }
+
+        async function saveLogRetention() {
+            const days = parseInt(document.getElementById('logRetentionInput').value);
+            const resultEl = document.getElementById('logRetentionResult');
+            try {
+                const data = await api('/logs/config', {
+                    method: 'PUT',
+                    body: JSON.stringify({ logRetentionDays: days }),
+                });
+                resultEl.className = 'text-xs text-emerald-400';
+                resultEl.textContent = data.message;
+                resultEl.classList.remove('hidden');
+            } catch (e) {
+                resultEl.className = 'text-xs text-red-400';
+                resultEl.textContent = '保存失败';
+                resultEl.classList.remove('hidden');
+            }
+        }
+
+        // --- Config ---
+        async function loadConfig() {
+            try {
+                const data = await api('/config/raw');
+                document.getElementById('configApiKeyInput').value = data.tmdb.apiKey;
+                document.getElementById('configLangInput').value = data.tmdb.language;
+                document.getElementById('configProxyInput').value = data.tmdb.httpProxy || '';
+                document.getElementById('configAuthKeyInput').value = data.tmdb.authKey || '';
+                document.getElementById('configProxyImagesInput').checked = data.tmdb.proxyImages !== false;
+                document.getElementById('configResolveDnsInput').checked = data.tmdb.resolveTmdbDns === true;
+                document.getElementById('configPortInput').value = data.server.port;
+            } catch (e) {
+                console.error('Failed to load config:', e);
+            }
+        }
+
+        async function saveConfig() {
+            const resultEl = document.getElementById('configSaveResult');
+            const apiKey = document.getElementById('configApiKeyInput').value.trim();
+            const language = document.getElementById('configLangInput').value;
+            const httpProxy = document.getElementById('configProxyInput').value.trim();
+            const authKey = document.getElementById('configAuthKeyInput').value.trim();
+            const proxyImages = document.getElementById('configProxyImagesInput').checked;
+            const resolveTmdbDns = document.getElementById('configResolveDnsInput').checked;
+            const port = parseInt(document.getElementById('configPortInput').value);
+
+            if (!apiKey || apiKey.length < 5) {
+                resultEl.className = 'mt-4 text-sm text-red-400';
+                resultEl.textContent = 'API Key 无效';
+                resultEl.classList.remove('hidden');
+                return;
+            }
+            if (!port || port < 1 || port > 65535) {
+                resultEl.className = 'mt-4 text-sm text-red-400';
+                resultEl.textContent = '端口无效';
+                resultEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const data = await api('/config', {
+                    method: 'PUT',
+                    body: JSON.stringify({ tmdb: { apiKey, language, httpProxy, authKey, proxyImages, resolveTmdbDns }, server: { port } }),
+                });
+                resultEl.className = 'mt-4 text-sm text-emerald-400';
+                resultEl.textContent = data.message || '保存成功';
+                resultEl.classList.remove('hidden');
+            } catch (e) {
+                resultEl.className = 'mt-4 text-sm text-red-400';
+                resultEl.textContent = '保存失败: ' + e.message;
+                resultEl.classList.remove('hidden');
+            }
+        }
+
+        async function testDns() {
+            const btn = document.getElementById('dnsTestBtn');
+            const resultEl = document.getElementById('dnsTestResult');
+            const outputEl = document.getElementById('dnsTestOutput');
+            const origText = btn.textContent;
+            btn.textContent = '检测中...';
+            btn.disabled = true;
+            resultEl.classList.remove('hidden');
+            outputEl.innerHTML = '<span class="text-slate-500">正在检测...</span>';
+
+            try {
+                const data = await api('/dns/test');
+                let html = '';
+
+                // DNS server connectivity
+                html += `<div class="flex items-center gap-2">
+                    <span class="${data.dnsReachable ? 'text-emerald-400' : 'text-red-400'}">${data.dnsReachable ? '✓' : '✗'}</span>
+                    <span class="text-slate-400">DNS 服务器 (8.8.8.8)</span>
+                    <span class="text-slate-500 ml-auto">${data.dnsLatency}ms</span>
+                </div>`;
+
+                // Domain resolution
+                html += `<div class="flex items-center gap-2">
+                    <span class="${data.resolveSuccess ? 'text-emerald-400' : 'text-red-400'}">${data.resolveSuccess ? '✓' : '✗'}</span>
+                    <span class="text-slate-400">域名解析</span>
+                    ${data.resolvedIp ? `<span class="text-slate-500 ml-auto">${data.resolvedIp}</span>` : ''}
+                    <span class="text-slate-500 ml-auto">${data.resolveLatency}ms</span>
+                </div>`;
+
+                // HTTPS connection
+                html += `<div class="flex items-center gap-2">
+                    <span class="${data.httpsSuccess ? 'text-emerald-400' : 'text-red-400'}">${data.httpsSuccess ? '✓' : '✗'}</span>
+                    <span class="text-slate-400">HTTPS 连接</span>
+                    <span class="text-slate-500 ml-auto">${data.httpsLatency}ms</span>
+                </div>`;
+
+                if (data.error) {
+                    html += `<div class="text-red-400 mt-1">${data.error}</div>`;
+                }
+
+                if (data.dnsReachable && data.resolveSuccess && data.httpsSuccess) {
+                    html += `<div class="text-emerald-400 mt-2">✓ 检测通过，可以开启 DNS 覆盖</div>`;
+                } else {
+                    html += `<div class="text-red-400 mt-2">✗ 检测未通过，建议使用 HTTP 代理</div>`;
+                }
+
+                outputEl.innerHTML = html;
+            } catch (e) {
+                outputEl.innerHTML = `<span class="text-red-400">检测失败: ${e.message}</span>`;
+            } finally {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- Posters ---
+        let posterPage = 1;
+
+        async function loadPosters(page = 1) {
+            posterPage = page;
+            const type = document.getElementById('posterTypeFilter').value;
+            const search = document.getElementById('posterSearchInput').value.trim();
+            const grid = document.getElementById('posterGrid');
+
+            // Show skeletons
+            grid.innerHTML = Array(24).fill('<div class="skeleton"></div>').join('');
+
+            try {
+                const data = await api(`/posters?page=${page}&limit=24&type=${type}&search=${encodeURIComponent(search)}&proxy=1`);
+                if (data.items.length === 0 && search) {
+                    grid.innerHTML = `<div class="col-span-full text-center py-16">
+                        <div class="text-slate-500 mb-3">缓存中未找到「${search}」</div>
+                        <button onclick="searchTmdb('${search.replace(/'/g, "\\'")}')" class="btn-primary rounded-xl px-5 py-2 text-sm font-medium text-white transition-all">从 TMDB 搜索</button>
+                    </div>`;
+                    document.getElementById('posterInfo').textContent = '';
+                    document.getElementById('posterPagination').innerHTML = '';
+                    return;
+                } else if (data.items.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-16 text-slate-500">暂无海报数据</div>';
+                } else {
+                    grid.innerHTML = data.items.map(item => `
+                        <div class="poster-card" onclick="openDetail(${item.tmdbId})">
+                            <img src="${item.posterPath}" alt="${item.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                            <span class="poster-badge ${item.type === 'movie' ? 'poster-badge-movie' : 'poster-badge-tv'}">${item.type === 'movie' ? '电影' : '剧集'}</span>
+                            <span class="poster-rating">&#9733; ${item.voteAverage.toFixed(1)}</span>
+                            <div class="poster-overlay">
+                                <div class="text-xs font-medium text-white truncate">${item.title}</div>
+                                <div class="text-[10px] text-slate-400">${item.releaseDate || ''}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                    if (search) {
+                        grid.innerHTML += `<div class="flex-shrink-0 w-20 flex items-center justify-center cursor-pointer" onclick="searchTmdb('${search.replace(/'/g, "\\'")}')">
+                            <div class="w-full aspect-[2/3] rounded-lg border border-dashed border-white/10 flex flex-col items-center justify-center gap-1 hover:border-pink-500/40 hover:bg-white/[0.03] transition-all">
+                                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                <span class="text-[9px] text-slate-500">搜索更多</span>
+                            </div>
+                        </div>`;
+                    }
+                }
+                document.getElementById('posterInfo').textContent = `共 ${data.total} 部，第 ${data.page}/${data.totalPages} 页`;
+                renderPosterPagination(data.page, data.totalPages);
+            } catch (e) {
+                grid.innerHTML = '<div class="col-span-full text-center py-16 text-red-400">加载失败</div>';
+                console.error('Failed to load posters:', e);
+            }
+        }
+
+        async function searchTmdb(query) {
+            const grid = document.getElementById('posterGrid');
+            grid.innerHTML = Array(12).fill('<div class="skeleton"></div>').join('');
+            document.getElementById('posterInfo').textContent = '正在搜索 TMDB...';
+            document.getElementById('posterPagination').innerHTML = '';
+
+            try {
+                const type = document.getElementById('posterTypeFilter').value;
+                const searchType = type === 'movie' ? 'movie' : type === 'tv' ? 'tv' : 'multi';
+                const data = await api(`/tmdb/search?q=${encodeURIComponent(query)}&type=${searchType}`);
+
+                if (!data.results.length) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-16 text-slate-500">TMDB 中未找到相关结果</div>';
+                    document.getElementById('posterInfo').textContent = '';
+                    return;
+                }
+
+                grid.innerHTML = data.results.map(item => `
+                    <div class="poster-card" onclick="openDetail(${item.tmdbId})">
+                        <img src="${item.posterPath}" alt="${item.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                        ${item.type !== 'person' ? `
+                        <span class="poster-badge ${item.type === 'movie' ? 'poster-badge-movie' : 'poster-badge-tv'}">${item.type === 'movie' ? '电影' : '剧集'}</span>
+                        <span class="poster-rating">&#9733; ${(item.voteAverage || 0).toFixed(1)}</span>
+                        ` : `<span class="poster-badge" style="background:rgba(139,92,246,0.3);color:#c4b5fd">人物</span>`}
+                        <div class="poster-overlay">
+                            <div class="text-xs font-medium text-white truncate">${item.title}</div>
+                            <div class="text-[10px] text-slate-400">${item.releaseDate || ''}</div>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('posterInfo').textContent = `TMDB 搜索结果：共 ${data.total} 条`;
+            } catch (e) {
+                grid.innerHTML = '<div class="col-span-full text-center py-16 text-red-400">TMDB 搜索失败</div>';
+                console.error('TMDB search failed:', e);
+            }
+        }
+
+        function renderPosterPagination(page, totalPages) {
+            const container = document.getElementById('posterPagination');
+            let html = '';
+            if (page > 1) html += `<button onclick="loadPosters(${page - 1})" class="btn-ghost rounded-lg px-3 py-1.5 text-xs transition-all">上一页</button>`;
+            if (page < totalPages) html += `<button onclick="loadPosters(${page + 1})" class="btn-ghost rounded-lg px-3 py-1.5 text-xs transition-all">下一页</button>`;
+            container.innerHTML = html;
+        }
+
+        // --- Detail Modal ---
+        async function openDetail(tmdbId) {
+            const modal = document.getElementById('detailModal');
+            const content = document.getElementById('modalContent');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
+
+            try {
+                const d = await api(`/posters/detail/${tmdbId}?proxy=1`);
+                const isMovie = d.type === 'movie';
+                const year = d.releaseDate ? d.releaseDate.substring(0, 4) : '';
+                const runtimeText = d.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m` : '';
+                const ratingPercent = Math.round(d.voteAverage * 10);
+
+                content.innerHTML = `
+                    ${d._partial ? '<div class="mx-6 mt-4 px-4 py-2.5 rounded-xl text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20">仅缓存了基本信息（来自列表页），详细数据尚未缓存。Warmer 会在后续自动抓取完整详情。</div>' : ''}
+                    <!-- Hero -->
+                    <div class="modal-hero">
+                        ${d.backdropPath ? `<img src="${d.backdropPath}" alt="">` : ''}
+                        <div class="modal-hero-gradient"></div>
+                        ${d.posterPath ? `<div class="modal-poster-float"><img src="${d.posterPath}" alt=""></div>` : ''}
+                        ${d.logoPath ? `<div class="absolute bottom-8 left-[170px] z-10 flex items-end"><img src="${d.logoPath}" class="max-w-[200px] max-h-[50px] object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]" alt=""></div>` : ''}
+                    </div>
+
+                    <div class="px-6 pb-6" style="padding-top:20px">
+                        <!-- Title & Meta -->
+                        <div class="mb-4">
+                            <h2 class="text-xl font-bold text-white mb-1">${d.title} ${year ? `<span class="text-slate-400 font-normal">(${year})</span>` : ''}</h2>
+                            ${d.tagline ? `<p class="text-sm text-slate-400 italic mb-2">${d.tagline}</p>` : ''}
+                            <div class="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-sm font-bold ${d.voteAverage >= 7 ? 'bg-emerald-500/20 text-emerald-400' : d.voteAverage >= 5 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}">
+                                    &#9733; ${d.voteAverage.toFixed(1)} <span class="text-[10px] font-normal text-slate-500">(${d.voteCount.toLocaleString()} votes)</span>
+                                </span>
+                                ${runtimeText ? `<span>${runtimeText}</span>` : ''}
+                                ${d.status ? `<span>${d.status}</span>` : ''}
+                                ${d.originalLanguage ? `<span class="uppercase">${d.originalLanguage}</span>` : ''}
+                                ${!isMovie && d.numberOfSeasons ? `<span>${d.numberOfSeasons} 季 / ${d.numberOfEpisodes} 集</span>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Genres -->
+                        ${d.genres?.length ? `<div class="flex flex-wrap gap-2 mb-4">${d.genres.map(g => `<span class="genre-chip">${g.name}</span>`).join('')}</div>` : ''}
+
+                        <!-- Overview -->
+                        ${d.overview ? `<div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-2">简介</h3><p class="text-sm text-slate-400 leading-relaxed">${d.overview}</p></div>` : ''}
+
+                        <!-- Financial (movie only) -->
+                        ${isMovie && (d.budget || d.revenue) ? `
+                        <div class="grid grid-cols-2 gap-3 mb-5">
+                            ${d.budget ? `<div class="glass rounded-xl p-3"><div class="text-[10px] text-slate-500 mb-1">预算</div><div class="text-sm font-medium text-slate-200">$${(d.budget / 1e6).toFixed(1)}M</div></div>` : ''}
+                            ${d.revenue ? `<div class="glass rounded-xl p-3"><div class="text-[10px] text-slate-500 mb-1">票房</div><div class="text-sm font-medium text-slate-200">$${(d.revenue / 1e6).toFixed(1)}M</div></div>` : ''}
+                        </div>` : ''}
+
+                        <!-- TV Info -->
+                        ${!isMovie && d.networks?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-2">播出网络</h3>
+                        <div class="flex flex-wrap gap-3">${d.networks.map(n => `<span class="text-xs text-slate-400">${n.name}</span>`).join('')}</div></div>` : ''}
+
+                        ${!isMovie && d.createdBy?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-2">创作者</h3>
+                        <div class="flex flex-wrap gap-3">${d.createdBy.map(c => `<span class="text-xs text-slate-400">${c.name}</span>`).join('')}</div></div>` : ''}
+
+                        ${!isMovie && d.seasons?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-2">季度</h3>
+                        <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2" id="seasonList">${d.seasons.filter(s => s.season_number > 0).map(s => `
+                            <div class="flex-shrink-0 glass rounded-xl p-3 w-28 text-center cursor-pointer hover:bg-white/[0.08] transition-all season-card" onclick="loadSeason(${d.tmdbId}, ${s.season_number})" data-season="${s.season_number}">
+                                ${s.posterPath ? `<img src="${s.posterPath}" class="w-full rounded-lg mb-2" alt="">` : '<div class="w-full aspect-[2/3] rounded-lg bg-white/5 mb-2"></div>'}
+                                <div class="text-xs font-medium text-slate-300 truncate">${s.name}</div>
+                                <div class="text-[10px] text-slate-500">${s.episode_count} 集</div>
+                            </div>`).join('')}</div>
+                        <div id="seasonDetail" class="mt-3"></div>
+                        </div>` : ''}
+
+                        <!-- Cast -->
+                        ${d.cast?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">演员</h3>
+                        <div class="flex gap-4 overflow-x-auto scrollbar-thin pb-2">${d.cast.map(c => `
+                            <div class="cast-card">
+                                ${c.profilePath ? `<img src="${c.profilePath}" alt="${c.name}">` : '<div class="w-16 h-16 rounded-full bg-white/5 mx-auto mb-1.5"></div>'}
+                                <div class="text-[11px] text-slate-300 truncate">${c.name}</div>
+                                <div class="text-[10px] text-slate-500 truncate">${c.character}</div>
+                            </div>`).join('')}</div></div>` : ''}
+
+                        <!-- Backdrops -->
+                        ${d.backdrops?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">剧照</h3>
+                        <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2">${d.backdrops.map(b => `
+                            <div class="backdrop-thumb"><img src="${b}" alt="" loading="lazy"></div>`).join('')}</div></div>` : ''}
+
+                        <!-- Videos -->
+                        ${d.videos?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">预告片</h3>
+                        <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2">${d.videos.map(v => `
+                            <a href="https://www.youtube.com/watch?v=${v.key}" target="_blank" class="flex-shrink-0 glass rounded-xl p-3 w-48 hover:bg-white/[0.08] transition-all">
+                                <div class="text-xs font-medium text-slate-300 truncate">${v.name}</div>
+                                <div class="text-[10px] text-slate-500">${v.type}</div>
+                            </a>`).join('')}</div></div>` : ''}
+
+                        <!-- Recommendations -->
+                        ${d.recommendations?.length ? `
+                        <div class="mb-5"><h3 class="text-sm font-semibold text-slate-300 mb-3">推荐</h3>
+                        <div class="flex gap-3 overflow-x-auto scrollbar-thin pb-2">${d.recommendations.map(r => `
+                            <div class="flex-shrink-0 w-20 cursor-pointer" onclick="openDetail(${r.tmdbId})">
+                                ${r.posterPath ? `<img src="${r.posterPath}" class="w-full rounded-lg mb-1 object-cover" style="aspect-ratio:2/3" alt="">` : '<div class="w-full rounded-lg bg-white/5 mb-1" style="aspect-ratio:2/3"></div>'}
+                                <div class="text-[10px] text-slate-400 truncate">${r.title}</div>
+                            </div>`).join('')}</div></div>` : ''}
+
+                        <!-- Links -->
+                        <div class="flex flex-wrap gap-2 pt-2">
+                            ${d.imdbId ? `<a href="https://www.imdb.com/title/${d.imdbId}" target="_blank" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">IMDb</a>` : ''}
+                            ${d.homepage ? `<a href="${d.homepage}" target="_blank" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">官网</a>` : ''}
+                            <a href="https://www.themoviedb.org/${isMovie ? 'movie' : 'tv'}/${d.tmdbId}" target="_blank" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">TMDB</a>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                content.innerHTML = '<div class="text-center py-20 text-red-400">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        async function loadSeason(tvId, seasonNumber) {
+            // Highlight active season card
+            document.querySelectorAll('.season-card').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.season-card[data-season="${seasonNumber}"]`)?.classList.add('active');
+
+            const container = document.getElementById('seasonDetail');
+            container.innerHTML = '<div class="skeleton h-32 rounded-xl"></div>';
+
+            try {
+                const data = await api(`/posters/season/${tvId}/${seasonNumber}?proxy=1`);
+                container.innerHTML = `
+                    <div class="glass rounded-xl p-4 fade-in">
+                        <div class="flex items-center gap-3 mb-3">
+                            <h4 class="text-sm font-semibold text-white">${data.name}</h4>
+                            ${data.airDate ? `<span class="text-xs text-slate-500">${data.airDate}</span>` : ''}
+                        </div>
+                        ${data.overview ? `<p class="text-xs text-slate-400 mb-4 leading-relaxed">${data.overview}</p>` : ''}
+                        <div class="max-h-[420px] overflow-y-auto pr-1 space-y-0 scrollbar-thin">${data.episodes.map(ep => `
+                            <div class="episode-row">
+                                ${ep.stillPath ? `<div class="flex-shrink-0 w-24 rounded-lg overflow-hidden"><img src="${ep.stillPath}" class="w-full" alt="" loading="lazy"></div>` : '<div class="flex-shrink-0 w-24 h-14 rounded-lg bg-white/5"></div>'}
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-0.5">
+                                        <span class="text-[10px] text-slate-500 font-mono">E${String(ep.episodeNumber).padStart(2,'0')}</span>
+                                        <span class="text-xs font-medium text-slate-200 truncate">${ep.name}</span>
+                                        ${ep.voteAverage ? `<span class="text-[10px] text-amber-400 ml-auto">&#9733; ${ep.voteAverage.toFixed(1)}</span>` : ''}
+                                    </div>
+                                    ${ep.overview ? `<p class="text-[10px] text-slate-500 line-clamp-2">${ep.overview}</p>` : ''}
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        ${ep.airDate ? `<span class="text-[10px] text-slate-600">${ep.airDate}</span>` : ''}
+                                        ${ep.runtime ? `<span class="text-[10px] text-slate-600">${ep.runtime}min</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>`).join('')}
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = '<div class="text-xs text-red-400 py-4">加载失败</div>';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+        // --- Helpers ---
+        function getType(url) {
+            if (/\/movie\/\d+/.test(url)) return 'movie';
+            if (/\/tv\/\d+/.test(url)) return 'tv';
+            if (/\/person\/\d+/.test(url)) return 'person';
+            if (/\/(popular|top_rated|now_playing|on_the_air|airing_today|trending|discover)/.test(url)) return 'list';
+            return 'other';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const pad = n => n.toString().padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        function parseUA(ua) {
+            if (!ua) return '-';
+            if (ua.includes('Emby')) return 'Emby';
+            if (ua.includes('Jellyfin')) return 'Jellyfin';
+            if (ua.includes('Plex')) return 'Plex';
+            if (ua.includes('Kodi')) return 'Kodi';
+            if (ua.includes('TmdbCacheX')) return 'TmdbCacheX';
+            if (ua.includes('curl')) return 'curl';
+            if (ua.includes('Python')) return 'Python';
+            if (ua.includes('axios')) return 'Axios';
+            const m = ua.match(/(Chrome|Firefox|Safari|Edge)\/[\d.]+/);
+            return m ? m[0] : ua.substring(0, 30);
+        }
+
+        // --- Enter key search ---
+        document.getElementById('cacheSearch').addEventListener('keydown', e => {
+            if (e.key === 'Enter') loadCache(1);
+        });
+
+        // --- Init ---
+        document.querySelectorAll('select').forEach(initCustomSelect);
+        loadStats();
+        loadCache(1);
+        loadWarmerStatus();
+
+        // Set docs URLs dynamically
+        const docsBase = `${window.location.protocol}//${window.location.host}`;
+        const docsBaseUrlEl = document.getElementById('docsBaseUrl');
+        if (docsBaseUrlEl) docsBaseUrlEl.textContent = docsBase;
+        const docsEmbyApiUrlEl = document.getElementById('docsEmbyApiUrl');
+        if (docsEmbyApiUrlEl) docsEmbyApiUrlEl.textContent = docsBase;
+        const docsEmbyImgUrlEl = document.getElementById('docsEmbyImgUrl');
+        if (docsEmbyImgUrlEl) docsEmbyImgUrlEl.textContent = docsBase;
+        const docsCurlEl = document.getElementById('docsCurlExample');
+        if (docsCurlEl) docsCurlEl.textContent = `curl ${docsBase}/3/movie/550?api_key=YOUR_KEY`;
+
+        // Auto-refresh every 30s
+        setInterval(() => {
+            loadStats();
+            loadWarmerStatus();
+            if (currentTab === 'cache') loadCache(currentPage);
+        }, 10000);
+    </script>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        let W, H;
+        function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // --- Floating particles ---
+        const FLOAT_COUNT = 60;
+        const floaters = [];
+        for (let i = 0; i < FLOAT_COUNT; i++) {
+            floaters.push({
+                x: Math.random() * W,
+                y: Math.random() * H,
+                r: Math.random() * 2 + 0.5,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: (Math.random() - 0.5) * 0.3 - 0.15,
+                alpha: Math.random() * 0.3 + 0.1,
+                color: ['139,92,246', '236,72,153', '59,130,246', '34,211,238'][Math.floor(Math.random() * 4)]
+            });
+        }
+
+        // --- Mouse ripple particles ---
+        const ripples = [];
+        let mouseX = -100, mouseY = -100, lastMouseX = -100, lastMouseY = -100;
+
+        document.addEventListener('mousemove', e => {
+            mouseX = e.clientX; mouseY = e.clientY;
+            const dx = mouseX - lastMouseX, dy = mouseY - lastMouseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 8) {
+                lastMouseX = mouseX; lastMouseY = mouseY;
+                // Emit ripple particles
+                const count = Math.min(4, Math.floor(dist / 10) + 1);
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 1.5 + 0.5;
+                    ripples.push({
+                        x: mouseX + (Math.random() - 0.5) * 10,
+                        y: mouseY + (Math.random() - 0.5) * 10,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        r: Math.random() * 3 + 1.5,
+                        life: 1,
+                        decay: Math.random() * 0.015 + 0.01,
+                        color: '236,72,153'
+                    });
+                }
+            }
+        });
+
+        function animate() {
+            ctx.clearRect(0, 0, W, H);
+
+            // Draw floating particles
+            for (const p of floaters) {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < -10) p.x = W + 10;
+                if (p.x > W + 10) p.x = -10;
+                if (p.y < -10) p.y = H + 10;
+                if (p.y > H + 10) p.y = -10;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
+                ctx.fill();
+            }
+
+            // Draw ripple particles
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const p = ripples[i];
+                p.x += p.vx; p.y += p.vy;
+                p.vx *= 0.98; p.vy *= 0.98;
+                p.life -= p.decay;
+                if (p.life <= 0) { ripples.splice(i, 1); continue; }
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(${p.color},${p.life * 0.6})`;
+                ctx.fill();
+            }
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+    })();
+    </script>
+</body>
+</html>

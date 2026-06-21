@@ -14,4 +14,17 @@ model TmdbCache {
   response  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  expiresAt DateTime @default(now())
+}
+
+model ApiLog {
+  id        Int      @id @default(autoincrement())
+  url       String
+  title     String?
+  type      String?
+  source    String?
+  hit       Boolean
+  ip        String?
+  ua        String?
+  createdAt DateTime @default(now())
 }

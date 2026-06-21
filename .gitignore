@@ -1,6 +1,8 @@
 node_modules
 # Keep environment variables out of version control
 .env
+# Keep config file (contains API keys) out of version control
+config.json
 
 /generated/prisma
 

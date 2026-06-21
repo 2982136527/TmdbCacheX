@@ -1,13 +1,32 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
-const prisma = new PrismaClient();
+import { config } from './config.js';
+export const prisma = new PrismaClient();
 const TMDB_BASE_URL = 'https://api.themoviedb.org';
-// You might want to get this from env or pass it in the request if you want to support different keys
-// For now, we assume the user passes the api_key in the query string, so we just forward it.
-// IF the user wants us to manage the key, we could inject it here.
-// Simple in-memory queue for background prefetching
+const CACHE_TTL_MS = 7 * 24 * 3600 * 1000; // 7 days
+function getProxyConfig() {
+    const p = config.tmdb.httpProxy;
+    if (!p)
+        return {};
+    try {
+        const url = new URL(p);
+        return {
+            proxy: {
+                host: url.hostname,
+                port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
+                protocol: url.protocol.replace(':', ''),
+            }
+        };
+    }
+    catch {
+        return {};
+    }
+}
+// Prefetch queue with bounds and dedup
 const prefetchQueue = [];
+const enqueuedUrls = new Set();
 let isProcessingQueue = false;
+const MAX_QUEUE_SIZE = 500;
 async function processQueue() {
     if (isProcessingQueue)
         return;
@@ -15,77 +34,113 @@ async function processQueue() {
     while (prefetchQueue.length > 0) {
         const url = prefetchQueue.shift();
         if (url) {
+            enqueuedUrls.delete(url);
             try {
-                // Ensure we don't re-trigger prefetch for these background requests to avoid loops
-                // (Though our logic only prefetches on 'results' lists, and details don't have results, safe enough)
-                console.log(`[PREFETCH] Processing background job: ${url}`);
-                await handleTmdbRequest(url, true); // true = isBackground
-                await new Promise(r => setTimeout(r, 250)); // Rate limit protection
+                await handleTmdbRequest(url, true);
+                await new Promise(r => setTimeout(r, 250));
             }
             catch (e) {
-                console.error(`[PREFETCH] Failed: ${url}`);
+                console.error(`[PREFETCH] Failed: ${getCacheKey(url)}`);
             }
         }
     }
+    enqueuedUrls.clear();
     isProcessingQueue = false;
 }
 export async function handleTmdbRequest(urlPath, isBackground = false) {
-    // 1. Check Cache
-    // We cache by the exact URL path + query string.
-    // Normalize logic for cache key (stripping API key is good practice but kept simple here as per previous code)
+    // 1. Auth key validation & replacement (before cache check)
+    const urlObj = new URL(urlPath, TMDB_BASE_URL);
+    const incomingKey = urlObj.searchParams.get('api_key');
+    if (incomingKey) {
+        // Only validate auth for external requests (not cache warmer/prefetch)
+        if (!isBackground && config.tmdb.authKey) {
+            if (incomingKey !== config.tmdb.authKey) {
+                const err = new Error('Invalid API key');
+                err.response = { status: 401, data: { status_message: 'Invalid API key' } };
+                throw err;
+            }
+        }
+        // Always replace with real TMDB key (handles custom keys from Emby plugins)
+        if (incomingKey !== config.tmdb.apiKey) {
+            urlObj.searchParams.set('api_key', config.tmdb.apiKey);
+            urlPath = (urlObj.pathname + urlObj.search).replace(/^\//, '');
+        }
+    }
+    // 2. Compute cache key (normalize: strip api_key, sort params, strip append_to_response for detail endpoints)
     const cacheKey = getCacheKey(urlPath);
     const cached = await prisma.tmdbCache.findUnique({
         where: { url: cacheKey }
     });
     if (cached) {
-        // If it's a background request and we have it, just return (job done)
-        if (isBackground)
-            return JSON.parse(cached.response);
-        console.log(`[CACHE HIT] ${cacheKey}`);
-        const data = JSON.parse(cached.response);
-        // Even on cache hit, if it looks like a list, we might want to ensure children are cached?
-        // For now, let's only trigger on FRESH fetches or if user explicitly wants "active" caching constantly.
-        // Let's safe trigger just in case the list is cached but children aren't.
-        if (!isBackground)
+        // Check TTL
+        const age = Date.now() - new Date(cached.updatedAt).getTime();
+        if (age < CACHE_TTL_MS) {
+            const data = JSON.parse(cached.response);
+            if (isBackground) {
+                // Still trigger prefetch for list pages even on cache hit
+                if (data.results && Array.isArray(data.results)) {
+                    triggerBackgroundPrefetch(data, urlPath);
+                }
+                return data;
+            }
+            console.log(`[CACHE HIT] ${cacheKey}`);
             triggerBackgroundPrefetch(data, urlPath);
-        return data;
+            return data;
+        }
+        console.log(`[CACHE EXPIRED] ${cacheKey}`);
     }
-    // 2. Fetch from TMDB
-    // console.log(`[CACHE MISS] ${cacheKey} -> Fetching from upstream${isBackground ? ' (Background)' : ''}`);
-    // Construct upstream URL
-    let upsreamUrl = `${TMDB_BASE_URL}/${urlPath}`;
-    // Auto-Enrichment: If this is a details request
-    const detailsMatch = urlPath.match(/(^|\/)3\/(movie|tv)\/(\d+)(\?|$)/);
-    if (detailsMatch) {
-        // console.log(`[ENRICH] Detected details request. Injecting full metadata...`);
-        const urlObj = new URL(upsreamUrl);
-        // Params we want to force
-        const extraFields = 'credits,images,release_dates,videos,external_ids,content_ratings';
-        // Merge with existing append_to_response if any
+    // 2. Construct upstream URL
+    let upstreamUrl = `${TMDB_BASE_URL}/${urlPath}`;
+    // Auto-Enrichment for detail endpoints
+    const movieTvMatch = urlPath.match(/(^|\/)3\/(movie|tv)\/(\d+)(\?|$)/);
+    const personMatch = urlPath.match(/(^|\/)3\/person\/(\d+)(\?|$)/);
+    if (movieTvMatch) {
+        const contentType = movieTvMatch[2]; // 'movie' or 'tv'
+        const urlObj = new URL(upstreamUrl);
+        // Common fields for both movie and TV
+        const commonFields = 'credits,images,videos,external_ids,recommendations,similar,keywords,watch/providers';
+        // Content-type specific fields
+        const typeSpecificFields = contentType === 'movie'
+            ? 'release_dates' // movie: release_dates (certifications)
+            : 'content_ratings,aggregate_credits'; // TV: content_ratings + aggregate_credits
+        const extraFields = `${commonFields},${typeSpecificFields}`;
         const existingAppend = urlObj.searchParams.get('append_to_response');
-        // Only add if not present to avoid duplication if re-processing
         if (!existingAppend || !existingAppend.includes('credits')) {
             const newAppend = existingAppend ? `${existingAppend},${extraFields}` : extraFields;
             urlObj.searchParams.set('append_to_response', newAppend);
             urlObj.searchParams.set('include_image_language', 'zh,null');
-            upsreamUrl = urlObj.toString();
+            upstreamUrl = urlObj.toString();
+        }
+    }
+    else if (personMatch) {
+        // Enrich person endpoints with credits and images
+        const urlObj = new URL(upstreamUrl);
+        const extraFields = 'combined_credits,images,external_ids,movie_credits,tv_credits';
+        const existingAppend = urlObj.searchParams.get('append_to_response');
+        if (!existingAppend || !existingAppend.includes('combined_credits')) {
+            const newAppend = existingAppend ? `${existingAppend},${extraFields}` : extraFields;
+            urlObj.searchParams.set('append_to_response', newAppend);
+            upstreamUrl = urlObj.toString();
         }
     }
     try {
-        const response = await axios.get(upsreamUrl, {
+        const response = await axios.get(upstreamUrl, {
             headers: {
                 'User-Agent': 'TmdbCacheX/1.0'
-            }
+            },
+            ...getProxyConfig(),
         });
         const data = response.data;
-        // 3. Save to Cache
-        // Use upsert to handle race conditions where background prefetch might have inserted it already
+        // 3. Save to Cache (cache stringify result to avoid double work)
+        const responseStr = JSON.stringify(data);
+        const now = new Date();
         await prisma.tmdbCache.upsert({
             where: { url: cacheKey },
-            update: { response: JSON.stringify(data) },
+            update: { response: responseStr, expiresAt: new Date(now.getTime() + CACHE_TTL_MS) },
             create: {
                 url: cacheKey,
-                response: JSON.stringify(data)
+                response: responseStr,
+                expiresAt: new Date(now.getTime() + CACHE_TTL_MS)
             }
         });
         const title = data.title || data.name;
@@ -93,10 +148,12 @@ export async function handleTmdbRequest(urlPath, isBackground = false) {
             console.log(`✅ [${isBackground ? 'Auto-Crawl' : 'Fetch'}] ${title} (ID:${data.id})`);
         }
         else if (isBackground) {
-            console.log(`✅ [Auto-Crawl] Fetched ${urlPath}`);
+            console.log(`✅ [Auto-Crawl] Fetched ${cacheKey}`);
         }
-        // 4. Trigger Background Prefetch if active request
-        if (!isBackground) {
+        // 4. Trigger Background Prefetch
+        // Always trigger for list pages (including Warmer); skip for prefetched detail pages to avoid cascading
+        const isListPage = data.results && Array.isArray(data.results);
+        if (isListPage || !isBackground) {
             triggerBackgroundPrefetch(data, urlPath);
         }
         return data;
@@ -105,36 +162,75 @@ export async function handleTmdbRequest(urlPath, isBackground = false) {
         throw error;
     }
 }
+function enqueueUrl(url) {
+    if (enqueuedUrls.has(url))
+        return false;
+    if (prefetchQueue.length >= MAX_QUEUE_SIZE)
+        return false;
+    prefetchQueue.push(url);
+    enqueuedUrls.add(url);
+    return true;
+}
 function triggerBackgroundPrefetch(data, originalUrl) {
     try {
-        if (!data.results || !Array.isArray(data.results))
-            return;
-        // Extract API key from original request to reuse
         const urlObj = new URL(originalUrl, TMDB_BASE_URL);
-        const apiKey = urlObj.searchParams.get('api_key');
-        if (!apiKey)
+        const extractedApiKey = urlObj.searchParams.get('api_key');
+        if (!extractedApiKey)
             return;
-        // Detect content type
-        let type = 'movie';
-        if (originalUrl.includes('/tv'))
-            type = 'tv';
-        // If mixed (multi-search), try to infer from item media_type
+        const lang = urlObj.searchParams.get('language') || 'zh-CN';
         let addedCount = 0;
-        for (const item of data.results) {
-            const itemType = item.media_type || type; // 'person', 'movie', 'tv'
-            if (itemType !== 'movie' && itemType !== 'tv')
-                continue;
-            // Construct the details URL
-            // We want the same language as the list usually
-            const lang = urlObj.searchParams.get('language') || 'zh-CN';
-            const prefetchUrl = `3/${itemType}/${item.id}?api_key=${apiKey}&language=${lang}`;
-            // Check if already in queue or (ideally) if already cached? 
-            // For simplicity, just push. The cache check in handleTmdbRequest handles existence.
-            prefetchQueue.push(prefetchUrl);
-            addedCount++;
+        // 1. Prefetch from list/search results
+        if (data.results && Array.isArray(data.results)) {
+            let type = 'movie';
+            if (originalUrl.includes('/tv'))
+                type = 'tv';
+            for (const item of data.results) {
+                const itemType = item.media_type || type;
+                if (itemType === 'person') {
+                    // Prefetch person details too
+                    const personUrl = `3/person/${item.id}?api_key=${extractedApiKey}&language=${lang}`;
+                    if (enqueueUrl(personUrl))
+                        addedCount++;
+                }
+                else if (itemType === 'movie' || itemType === 'tv') {
+                    const detailUrl = `3/${itemType}/${item.id}?api_key=${extractedApiKey}&language=${lang}`;
+                    if (enqueueUrl(detailUrl))
+                        addedCount++;
+                }
+            }
+        }
+        // 2. Prefetch from detail page: recommendations and similar
+        if (data.recommendations?.results?.length) {
+            for (const item of data.recommendations.results) {
+                if (prefetchQueue.length >= MAX_QUEUE_SIZE)
+                    break;
+                const itemType = item.media_type || 'movie';
+                if (itemType !== 'movie' && itemType !== 'tv')
+                    continue;
+                const recUrl = `3/${itemType}/${item.id}?api_key=${extractedApiKey}&language=${lang}`;
+                if (enqueueUrl(recUrl))
+                    addedCount++;
+            }
+        }
+        if (data.similar?.results?.length) {
+            for (const item of data.similar.results) {
+                if (prefetchQueue.length >= MAX_QUEUE_SIZE)
+                    break;
+                // Detect type from original URL
+                const itemType = originalUrl.includes('/tv') ? 'tv' : 'movie';
+                const simUrl = `3/${itemType}/${item.id}?api_key=${extractedApiKey}&language=${lang}`;
+                if (enqueueUrl(simUrl))
+                    addedCount++;
+            }
+        }
+        // 3. Prefetch collection if movie belongs to one
+        if (data.belongs_to_collection?.id) {
+            const colUrl = `3/collection/${data.belongs_to_collection.id}?api_key=${extractedApiKey}&language=${lang}`;
+            if (enqueueUrl(colUrl))
+                addedCount++;
         }
         if (addedCount > 0) {
-            console.log(`[PREFETCH] Scheduled ${addedCount} items from list results.`);
+            console.log(`[PREFETCH] Scheduled ${addedCount} items.`);
             processQueue();
         }
     }
@@ -143,22 +239,22 @@ function triggerBackgroundPrefetch(data, originalUrl) {
     }
 }
 function getCacheKey(fullUrl) {
-    // Simplistic approach: use the full URL string as key.
-    // If we want to ignore api_key for caching purposes:
     try {
-        // fullUrl is likely "3/movie/550?api_key=xyz&language=en-US"
         const parts = fullUrl.split('?');
-        const path = parts[0];
-        if (!path)
+        const urlPath = parts[0];
+        if (!urlPath)
             return fullUrl;
         const search = parts[1];
         if (!search)
-            return path;
+            return urlPath;
         const params = new URLSearchParams(search);
         params.delete('api_key');
-        params.sort(); // normalize order
+        // Strip append_to_response from key since enrichment handles it uniformly
+        params.delete('append_to_response');
+        params.delete('include_image_language');
+        params.sort();
         const queryString = params.toString();
-        return queryString ? `${path}?${queryString}` : path;
+        return queryString ? `${urlPath}?${queryString}` : urlPath;
     }
     catch (e) {
         return fullUrl;

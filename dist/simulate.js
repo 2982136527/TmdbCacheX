@@ -1,9 +1,7 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
-dotenv.config();
+import { config } from './config.js';
 const PROXY_URL = 'http://127.0.0.1:3333';
-// Allow passing key via env or arg
-const API_KEY = process.env.TMDB_API_KEY || process.argv[2];
+const API_KEY = config.tmdb.apiKey || process.argv[2];
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 async function fetchWithRetry(url, retries = 5, delayMs = 1000) {
     for (let i = 0; i < retries; i++) {
@@ -24,17 +22,11 @@ async function fetchWithRetry(url, retries = 5, delayMs = 1000) {
 async function simulateScrape() {
     console.log('--- 🎬 Simulating Scraper ---');
     console.log(`Using Proxy: ${PROXY_URL}`);
-    if (!API_KEY) {
-        console.error('⚠️  No API Key found.');
-        console.error('   Please run with: TMDB_API_KEY=your_key npm run simulate');
-        // We will continue anyway to show the proxy handling the 401
-    }
     // 1. Search for a movie (e.g., "The Matrix")
     const searchQuery = 'The Matrix';
     console.log(`\n🔍 Step 1: Searching for "${searchQuery}"...`);
     try {
         const searchUrl = `${PROXY_URL}/3/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(searchQuery)}`;
-        // Use retry here
         const searchRes = await fetchWithRetry(searchUrl);
         const results = searchRes?.data.results;
         if (!results || results.length === 0) {
@@ -46,7 +38,7 @@ async function simulateScrape() {
         console.log(`   Overview: ${movie.overview.substring(0, 60)}...`);
         // 2. Fetch Details (simulating scraping metadata)
         console.log(`\n📄 Step 2: Fetching details for ID ${movie.id}...`);
-        const detailsUrl = `${PROXY_URL}/3/movie/${movie.id}?api_key=${API_KEY}&language=zh-CN`;
+        const detailsUrl = `${PROXY_URL}/3/movie/${movie.id}?api_key=${API_KEY}&language=${config.tmdb.language}`;
         const detailsRes = await fetchWithRetry(detailsUrl);
         const details = detailsRes?.data;
         console.log(`✅ Got Details!`);
@@ -61,7 +53,7 @@ async function simulateScrape() {
             console.error(`❌ HTTP Error: ${err.response.status} ${err.response.statusText}`);
             console.error(`   Message: ${JSON.stringify(err.response.data)}`);
             if (err.response.status === 401) {
-                console.log('\n💡 Tip: You likely need to provide a valid TMDB API Key.');
+                console.log('\n💡 Tip: You likely need to provide a valid TMDB API Key in config.json.');
             }
         }
         else {
