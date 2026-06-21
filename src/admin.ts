@@ -108,64 +108,72 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         const forceProxy = query.proxy === '1';
         const img = (size: string, p: string | null) => imgUrl(size, p, forceProxy);
 
-        // Fetch all cache entries (we need to parse responses to extract posters)
-        const entries = await prisma.tmdbCache.findMany({
-            select: { id: true, url: true, response: true },
-            orderBy: { updatedAt: 'desc' },
-        });
-
         const seen = new Set<number>();
         const allItems: any[] = [];
+        const BATCH = 1000;
 
-        for (const entry of entries) {
-            try {
-                const data = JSON.parse(entry.response);
+        // Process in batches to avoid memory issues
+        for (let offset = 0; ; offset += BATCH) {
+            const entries = await prisma.tmdbCache.findMany({
+                select: { id: true, url: true, response: true },
+                orderBy: { updatedAt: 'desc' },
+                skip: offset,
+                take: BATCH,
+            });
+            if (entries.length === 0) break;
 
-                // Detail page: /movie/123 or /tv/123
-                if (/\/movie\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'movie')) {
-                    if (data.poster_path && !seen.has(data.id)) {
-                        seen.add(data.id);
-                        allItems.push({
-                            tmdbId: data.id, type: 'movie',
-                            title: data.title || 'Unknown',
-                            posterPath: img('w500', data.poster_path),
-                            voteAverage: data.vote_average ?? 0,
-                            releaseDate: data.release_date || '',
-                        });
-                    }
-                } else if (/\/tv\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'tv')) {
-                    if (data.poster_path && !seen.has(data.id)) {
-                        seen.add(data.id);
-                        allItems.push({
-                            tmdbId: data.id, type: 'tv',
-                            title: data.name || 'Unknown',
-                            posterPath: img('w500', data.poster_path),
-                            voteAverage: data.vote_average ?? 0,
-                            releaseDate: data.first_air_date || '',
-                        });
-                    }
-                }
-                // List page: results[] array
-                else if (Array.isArray(data.results)) {
-                    const isMovieList = /\/movie\//.test(entry.url) || /\/trending\/movie\//.test(entry.url) || /\/discover\/movie/.test(entry.url);
-                    const isTvList = /\/tv\//.test(entry.url) || /\/trending\/tv\//.test(entry.url) || /\/discover\/tv/.test(entry.url);
-                    const wantType = isMovieList ? 'movie' : isTvList ? 'tv' : 'all';
-                    if (typeFilter !== 'all' && wantType !== 'all' && wantType !== typeFilter) continue;
+            for (const entry of entries) {
+                try {
+                    const data = JSON.parse(entry.response);
 
-                    for (const item of data.results) {
-                        if (!item.poster_path || seen.has(item.id)) continue;
-                        seen.add(item.id);
-                        const isMovie = wantType === 'movie' || (wantType === 'all' && (item.title || item.release_date));
-                        allItems.push({
-                            tmdbId: item.id, type: isMovie ? 'movie' : 'tv',
-                            title: (isMovie ? item.title : item.name) || 'Unknown',
-                            posterPath: img('w500', item.poster_path),
-                            voteAverage: item.vote_average ?? 0,
-                            releaseDate: (isMovie ? item.release_date : item.first_air_date) || '',
-                        });
+                    // Detail page: /movie/123 or /tv/123
+                    if (/\/movie\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'movie')) {
+                        if (data.poster_path && !seen.has(data.id)) {
+                            seen.add(data.id);
+                            allItems.push({
+                                tmdbId: data.id, type: 'movie',
+                                title: data.title || 'Unknown',
+                                posterPath: img('w500', data.poster_path),
+                                voteAverage: data.vote_average ?? 0,
+                                releaseDate: data.release_date || '',
+                            });
+                        }
+                    } else if (/\/tv\/\d+/.test(entry.url) && (typeFilter === 'all' || typeFilter === 'tv')) {
+                        if (data.poster_path && !seen.has(data.id)) {
+                            seen.add(data.id);
+                            allItems.push({
+                                tmdbId: data.id, type: 'tv',
+                                title: data.name || 'Unknown',
+                                posterPath: img('w500', data.poster_path),
+                                voteAverage: data.vote_average ?? 0,
+                                releaseDate: data.first_air_date || '',
+                            });
+                        }
                     }
-                }
-            } catch { /* skip unparseable */ }
+                    // List page: results[] array
+                    else if (Array.isArray(data.results)) {
+                        const isMovieList = /\/movie\//.test(entry.url) || /\/trending\/movie\//.test(entry.url) || /\/discover\/movie/.test(entry.url);
+                        const isTvList = /\/tv\//.test(entry.url) || /\/trending\/tv\//.test(entry.url) || /\/discover\/tv/.test(entry.url);
+                        const wantType = isMovieList ? 'movie' : isTvList ? 'tv' : 'all';
+                        if (typeFilter !== 'all' && wantType !== 'all' && wantType !== typeFilter) continue;
+
+                        for (const item of data.results) {
+                            if (!item.poster_path || seen.has(item.id)) continue;
+                            seen.add(item.id);
+                            const isMovie = wantType === 'movie' || (wantType === 'all' && (item.title || item.release_date));
+                            allItems.push({
+                                tmdbId: item.id, type: isMovie ? 'movie' : 'tv',
+                                title: (isMovie ? item.title : item.name) || 'Unknown',
+                                posterPath: img('w500', item.poster_path),
+                                voteAverage: item.vote_average ?? 0,
+                                releaseDate: (isMovie ? item.release_date : item.first_air_date) || '',
+                            });
+                        }
+                    }
+                } catch { /* skip unparseable */ }
+            }
+
+            if (entries.length < BATCH) break;
         }
 
         const filtered = searchQuery
@@ -187,126 +195,82 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         const img = (size: string, p: string | null) => imgUrl(size, p, forceProxy);
         const id = parseInt(tmdbId);
 
-        // Try detail page first (URL contains the id)
-        const entries = await prisma.tmdbCache.findMany({
-            select: { url: true, response: true },
-            orderBy: { updatedAt: 'desc' },
-        });
-
-        let listMatch: { url: string; item: any } | null = null;
-
-        for (const entry of entries) {
-            try {
-                const data = JSON.parse(entry.response);
-                // Detail page match (top-level movie/TV object with credits, etc.)
-                if ((data.id === id) && (data.title || data.name) && data.poster_path && data.credits) {
-                    const isMovie = /\/movie\//.test(entry.url);
-                    return {
-                        type: isMovie ? 'movie' : 'tv',
-                        tmdbId: data.id,
-                        title: isMovie ? data.title : data.name,
-                        originalTitle: isMovie ? data.original_title : data.original_name,
-                        overview: data.overview || '',
-                        posterPath: img('w500', data.poster_path),
-                        backdropPath: img('w780', data.backdrop_path),
-                        voteAverage: data.vote_average ?? 0,
-                        voteCount: data.vote_count ?? 0,
-                        releaseDate: isMovie ? data.release_date : data.first_air_date,
-                        runtime: data.runtime || data.episode_run_time?.[0] || null,
-                        genres: data.genres || [],
-                        tagline: data.tagline || '',
-                        status: data.status || '',
-                        budget: data.budget || 0,
-                        revenue: data.revenue || 0,
-                        homepage: data.homepage || '',
-                        imdbId: data.imdb_id || '',
-                        originalLanguage: data.original_language || '',
-                        productionCompanies: (data.production_companies || []).slice(0, 5),
-                        // TV specific
-                        numberOfSeasons: data.number_of_seasons || null,
-                        numberOfEpisodes: data.number_of_episodes || null,
-                        seasons: (data.seasons || []).map((s: any) => ({
-                            ...s,
-                            posterPath: img('w154', s.poster_path),
-                        })),
-                        networks: data.networks || null,
-                        createdBy: data.created_by || null,
-                        // Cast (top 12)
-                        cast: (data.credits?.cast || []).slice(0, 12).map((c: any) => ({
-                            id: c.id, name: c.name, character: c.character,
-                            profilePath: img('w185', c.profile_path),
-                        })),
-                        // Backdrops (top 6)
-                        backdrops: (data.images?.backdrops || []).slice(0, 6).map((b: any) =>
-                            img('w780', b.file_path)
-                        ),
-                        // Logo (prefer zh > en > any)
-                        logoPath: (() => {
-                            const logos = data.images?.logos || [];
-                            const zh = logos.find((l: any) => l.iso_639_1 === 'zh');
-                            if (zh) return img('w500', zh.file_path);
-                            const en = logos.find((l: any) => l.iso_639_1 === 'en');
-                            if (en) return img('w500', en.file_path);
-                            return logos[0] ? img('w500', logos[0].file_path) : null;
-                        })(),
-                        // Videos (trailers, first 3)
-                        videos: (data.videos?.results || [])
-                            .filter((v: any) => v.site === 'YouTube')
-                            .slice(0, 3)
-                            .map((v: any) => ({ key: v.key, name: v.name, type: v.type })),
-                        // Recommendations (top 8)
-                        recommendations: (data.recommendations?.results || []).slice(0, 8).map((r: any) => ({
-                            tmdbId: r.id, title: r.title || r.name,
-                            posterPath: img('w300', r.poster_path),
-                        })),
-                        // Watch providers
-                        watchProviders: data['watch/providers']?.results || null,
-                    };
-                }
-            } catch { /* skip */ }
+        // Helper to build detail response from cache entry
+        function buildDetail(entry: { url: string; response: string }) {
+            const data = JSON.parse(entry.response);
+            if (!((data.id === id) && (data.title || data.name) && data.poster_path && data.credits)) return null;
+            const isMovie = /\/movie\//.test(entry.url);
+            return {
+                type: isMovie ? 'movie' : 'tv',
+                tmdbId: data.id,
+                title: isMovie ? data.title : data.name,
+                originalTitle: isMovie ? data.original_title : data.original_name,
+                overview: data.overview || '',
+                posterPath: img('w500', data.poster_path),
+                backdropPath: img('w780', data.backdrop_path),
+                voteAverage: data.vote_average ?? 0,
+                voteCount: data.vote_count ?? 0,
+                releaseDate: isMovie ? data.release_date : data.first_air_date,
+                runtime: data.runtime || data.episode_run_time?.[0] || null,
+                genres: data.genres || [],
+                tagline: data.tagline || '',
+                status: data.status || '',
+                budget: data.budget || 0,
+                revenue: data.revenue || 0,
+                homepage: data.homepage || '',
+                imdbId: data.imdb_id || '',
+                originalLanguage: data.original_language || '',
+                productionCompanies: (data.production_companies || []).slice(0, 5),
+                numberOfSeasons: data.number_of_seasons || null,
+                numberOfEpisodes: data.number_of_episodes || null,
+                seasons: (data.seasons || []).map((s: any) => ({ ...s, posterPath: img('w154', s.poster_path) })),
+                networks: data.networks || null,
+                createdBy: data.created_by || null,
+                cast: (data.credits?.cast || []).slice(0, 12).map((c: any) => ({
+                    id: c.id, name: c.name, character: c.character,
+                    profilePath: img('w185', c.profile_path),
+                })),
+                backdrops: (data.images?.backdrops || []).slice(0, 6).map((b: any) => img('w780', b.file_path)),
+                logoPath: (() => {
+                    const logos = data.images?.logos || [];
+                    const zh = logos.find((l: any) => l.iso_639_1 === 'zh');
+                    if (zh) return img('w500', zh.file_path);
+                    const en = logos.find((l: any) => l.iso_639_1 === 'en');
+                    if (en) return img('w500', en.file_path);
+                    return logos[0] ? img('w500', logos[0].file_path) : null;
+                })(),
+                videos: (data.videos?.results || []).filter((v: any) => v.site === 'YouTube').slice(0, 3).map((v: any) => ({ key: v.key, name: v.name, type: v.type })),
+                recommendations: (data.recommendations?.results || []).slice(0, 8).map((r: any) => ({
+                    tmdbId: r.id, title: r.title || r.name,
+                    posterPath: img('w300', r.poster_path),
+                })),
+                watchProviders: data['watch/providers']?.results || null,
+            };
         }
 
-        // Save partial match from list pages (don't return yet — try TMDB fallback first)
-        let partialResult: any = null;
-        for (const entry of entries) {
-            try {
-                const data = JSON.parse(entry.response);
-                if (!Array.isArray(data.results)) continue;
-                const found = data.results.find((r: any) => r.id === id);
-                if (found && found.poster_path) {
-                    const isMovie = !!(found.title || found.release_date);
-                    partialResult = {
-                        type: isMovie ? 'movie' : 'tv',
-                        tmdbId: found.id,
-                        title: isMovie ? found.title : found.name,
-                        originalTitle: isMovie ? found.original_title : found.original_name,
-                        overview: found.overview || '',
-                        posterPath: img('w500', found.poster_path),
-                        backdropPath: img('w780', found.backdrop_path),
-                        voteAverage: found.vote_average ?? 0,
-                        voteCount: found.vote_count ?? 0,
-                        releaseDate: isMovie ? found.release_date : found.first_air_date,
-                        runtime: null, genres: [], tagline: '', status: '',
-                        budget: 0, revenue: 0, homepage: '', imdbId: '',
-                        originalLanguage: found.original_language || '',
-                        productionCompanies: [],
-                        numberOfSeasons: null, numberOfEpisodes: null,
-                        seasons: null, networks: null, createdBy: null,
-                        cast: [], backdrops: [], logoPath: null, videos: [], recommendations: [],
-                        watchProviders: null,
-                        _partial: true,
-                    };
-                    break;
-                }
-            } catch { /* skip */ }
+        // 1. Try exact URL match first (movie then TV)
+        for (const type of ['movie', 'tv']) {
+            const entry = await prisma.tmdbCache.findFirst({
+                where: { OR: [
+                    { url: `3/${type}/${id}` },
+                    { url: { startsWith: `3/${type}/${id}?` } },
+                ]},
+                select: { url: true, response: true },
+                orderBy: { updatedAt: 'desc' },
+            });
+            if (entry) {
+                try {
+                    const result = buildDetail(entry);
+                    if (result) return result;
+                } catch { /* skip */ }
+            }
         }
 
-        // Full detail not in cache — fetch from TMDB (auto-caches), then retry
+        // 2. TMDB fallback — fetch from TMDB (auto-caches), then retry
         try {
             const { handleTmdbRequest } = await import('./proxy.js');
             const apiKey = config.tmdb.apiKey;
             const lang = config.tmdb.language;
-            // Try movie first, then TV
             let fetched = false;
             try {
                 await handleTmdbRequest(`3/movie/${id}?api_key=${apiKey}&language=${lang}`, true);
@@ -320,70 +284,24 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             }
 
             if (fetched) {
-                // Retry cache lookup (same logic as above)
-                const retryEntries = await prisma.tmdbCache.findMany({
-                    select: { url: true, response: true },
-                    orderBy: { updatedAt: 'desc' },
-                });
-                for (const entry of retryEntries) {
-                    try {
-                        const data = JSON.parse(entry.response);
-                        if ((data.id === id) && (data.title || data.name) && data.poster_path && data.credits) {
-                            const isMovie = /\/movie\//.test(entry.url);
-                            return {
-                                type: isMovie ? 'movie' : 'tv',
-                                tmdbId: data.id,
-                                title: isMovie ? data.title : data.name,
-                                originalTitle: isMovie ? data.original_title : data.original_name,
-                                overview: data.overview || '',
-                                posterPath: img('w500', data.poster_path),
-                                backdropPath: img('w780', data.backdrop_path),
-                                voteAverage: data.vote_average ?? 0,
-                                voteCount: data.vote_count ?? 0,
-                                releaseDate: isMovie ? data.release_date : data.first_air_date,
-                                runtime: data.runtime || data.episode_run_time?.[0] || null,
-                                genres: data.genres || [],
-                                tagline: data.tagline || '',
-                                status: data.status || '',
-                                budget: data.budget || 0,
-                                revenue: data.revenue || 0,
-                                homepage: data.homepage || '',
-                                imdbId: data.imdb_id || '',
-                                originalLanguage: data.original_language || '',
-                                productionCompanies: (data.production_companies || []).slice(0, 5),
-                                numberOfSeasons: data.number_of_seasons || null,
-                                numberOfEpisodes: data.number_of_episodes || null,
-                                seasons: (data.seasons || []).map((s: any) => ({ ...s, posterPath: img('w154', s.poster_path) })),
-                                networks: data.networks || null,
-                                createdBy: data.created_by || null,
-                                cast: (data.credits?.cast || []).slice(0, 12).map((c: any) => ({
-                                    id: c.id, name: c.name, character: c.character,
-                                    profilePath: img('w185', c.profile_path),
-                                })),
-                                backdrops: (data.images?.backdrops || []).slice(0, 6).map((b: any) => img('w780', b.file_path)),
-                                logoPath: (() => {
-                                    const logos = data.images?.logos || [];
-                                    const zh = logos.find((l: any) => l.iso_639_1 === 'zh');
-                                    if (zh) return img('w500', zh.file_path);
-                                    const en = logos.find((l: any) => l.iso_639_1 === 'en');
-                                    if (en) return img('w500', en.file_path);
-                                    return logos[0] ? img('w500', logos[0].file_path) : null;
-                                })(),
-                                videos: (data.videos?.results || []).filter((v: any) => v.site === 'YouTube').slice(0, 3).map((v: any) => ({ key: v.key, name: v.name, type: v.type })),
-                                recommendations: (data.recommendations?.results || []).slice(0, 8).map((r: any) => ({
-                                    tmdbId: r.id, title: r.title || r.name,
-                                    posterPath: img('w300', r.poster_path),
-                                })),
-                                watchProviders: data['watch/providers']?.results || null,
-                            };
-                        }
-                    } catch { /* skip */ }
+                for (const type of ['movie', 'tv']) {
+                    const entry = await prisma.tmdbCache.findFirst({
+                        where: { OR: [
+                            { url: `3/${type}/${id}` },
+                            { url: { startsWith: `3/${type}/${id}?` } },
+                        ]},
+                        select: { url: true, response: true },
+                        orderBy: { updatedAt: 'desc' },
+                    });
+                    if (entry) {
+                        try {
+                            const result = buildDetail(entry);
+                            if (result) return result;
+                        } catch { /* skip */ }
+                    }
                 }
             }
         } catch {}
-
-        // Return partial result if available
-        if (partialResult) return partialResult;
 
         reply.code(404).send({ error: 'Not found in cache' });
     });
