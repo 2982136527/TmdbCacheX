@@ -24,10 +24,13 @@ function loadConfig(): AppConfig {
     const configPath = path.resolve(process.cwd(), CONFIG_FILE);
 
     if (!fs.existsSync(configPath)) {
-        console.error('❌ Configuration file not found: config.json');
-        console.error('   Please copy config.example.json to config.json and fill in your TMDB API key.');
-        console.error('   Example: cp config.example.json config.json');
-        process.exit(1);
+        console.warn('⚠️  config.json not found — creating default config.');
+        const examplePath = path.resolve(process.cwd(), 'config.example.json');
+        if (fs.existsSync(examplePath)) {
+            fs.copyFileSync(examplePath, configPath);
+        } else {
+            fs.writeFileSync(configPath, JSON.stringify({ tmdb: { apiKey: '', language: 'zh-CN' }, server: { port: 3333 } }, null, 2));
+        }
     }
 
     let raw: any;
@@ -38,12 +41,11 @@ function loadConfig(): AppConfig {
         process.exit(1);
     }
 
-    const apiKey = raw?.tmdb?.apiKey;
+    let apiKey = raw?.tmdb?.apiKey || '';
 
     if (!apiKey || PLACEHOLDER_VALUES.includes(apiKey)) {
-        console.error('❌ TMDB API key is missing or still set to placeholder value in config.json.');
-        console.error('   Please edit config.json and set tmdb.apiKey to your actual TMDB API key.');
-        process.exit(1);
+        console.warn('⚠️  TMDB API key not configured — please set it in the admin panel.');
+        apiKey = '';
     }
 
     const config: AppConfig = {
