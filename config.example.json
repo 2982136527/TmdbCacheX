@@ -1,9 +1,14 @@
 {
   "tmdb": {
     "apiKey": "YOUR_TMDB_API_KEY_HERE",
-    "language": "zh-CN"
+    "language": "zh-CN",
+    "httpProxy": "",
+    "authKey": "",
+    "proxyImages": true,
+    "resolveTmdbDns": false
   },
   "server": {
     "port": 3333
-  }
+  },
+  "logRetentionDays": 30
 }
