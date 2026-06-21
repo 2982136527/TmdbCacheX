@@ -55,13 +55,6 @@ npx prisma generate
 | `proxyImages` | 是否代理图片请求 |
 | `resolveTmdbDns` | 是否启用 DNS 覆盖（适用于 DNS 污染环境） |
 
-### 数据库
-
-本仓库不包含缓存数据库文件。如需使用预填充数据：
-
-1. 前往 [Releases](https://github.com/2982136527/TmdbCacheX/releases) 页面下载 `db_archive.zip`
-2. 解压到 `prisma/prisma/dev.db`（Prisma 相对路径解析机制决定的实际位置）
-
 ### 启动
 
 ```bash
