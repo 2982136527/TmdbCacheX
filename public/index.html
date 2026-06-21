@@ -1325,7 +1325,6 @@
         let discoverTotalPages = 1;
         let discoverLoading = false;
         let discoverGenreId = 0;
-        let discoverGenreName = '';
         let discoverType = 'movie';
 
         function renderGenreItem(item) {
@@ -1344,7 +1343,6 @@
             content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
 
             discoverGenreId = genreId;
-            discoverGenreName = genreName;
             discoverType = type === 'tv' ? 'tv' : 'movie';
             discoverPage = 1;
 
@@ -1360,12 +1358,22 @@
                             <h2 class="text-lg font-bold text-white">${genreName}</h2>
                         </div>
                         ${items.length === 0 ? '<div class="text-center py-20 text-slate-500">暂无结果</div>' : `
-                        <div id="genreGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(renderGenreItem).join('')}</div>
-                        <div id="genreLoadMore" class="mt-4 text-center">
-                            ${discoverPage < discoverTotalPages ? '<button onclick="loadMoreGenre()" class="btn-ghost rounded-xl px-6 py-2 text-sm">加载更多</button>' : '<span class="text-xs text-slate-500">已加载全部</span>'}
+                        <div id="genreScroll" class="max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+                            <div id="genreGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(renderGenreItem).join('')}</div>
+                            <div id="genreSpinner" class="py-4 text-center text-xs text-slate-500 hidden">加载中...</div>
                         </div>`}
                     </div>
                 `;
+
+                if (items.length > 0) {
+                    const scrollEl = document.getElementById('genreScroll');
+                    scrollEl.addEventListener('scroll', () => {
+                        if (discoverLoading || discoverPage >= discoverTotalPages) return;
+                        if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 100) {
+                            loadMoreGenre();
+                        }
+                    });
+                }
             } catch (e) {
                 content.innerHTML = '<div class="text-center py-20 text-red-400">加载失败: ' + e.message + '</div>';
             }
@@ -1374,27 +1382,23 @@
         async function loadMoreGenre() {
             if (discoverLoading || discoverPage >= discoverTotalPages) return;
             discoverLoading = true;
-            const btn = document.querySelector('#genreLoadMore button');
-            if (btn) { btn.textContent = '加载中...'; btn.disabled = true; }
+            const spinner = document.getElementById('genreSpinner');
+            spinner.classList.remove('hidden');
 
             try {
                 discoverPage++;
                 const data = await api(`/tmdb/discover?type=${discoverType}&genre=${discoverGenreId}&page=${discoverPage}`);
                 const items = data.results || [];
-                const grid = document.getElementById('genreGrid');
-                grid.insertAdjacentHTML('beforeend', items.map(renderGenreItem).join(''));
+                document.getElementById('genreGrid').insertAdjacentHTML('beforeend', items.map(renderGenreItem).join(''));
 
-                const loadMore = document.getElementById('genreLoadMore');
                 if (discoverPage >= discoverTotalPages) {
-                    loadMore.innerHTML = '<span class="text-xs text-slate-500">已加载全部</span>';
-                } else {
-                    loadMore.innerHTML = '<button onclick="loadMoreGenre()" class="btn-ghost rounded-xl px-6 py-2 text-sm">加载更多</button>';
+                    spinner.textContent = '已加载全部';
                 }
             } catch (e) {
-                const loadMore = document.getElementById('genreLoadMore');
-                loadMore.innerHTML = '<button onclick="loadMoreGenre()" class="btn-ghost rounded-xl px-6 py-2 text-sm text-red-400">重试</button>';
+                spinner.textContent = '加载失败，继续滚动重试';
             } finally {
                 discoverLoading = false;
+                if (discoverPage >= discoverTotalPages) spinner.classList.remove('hidden');
             }
         }
 
