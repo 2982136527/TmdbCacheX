@@ -92,4 +92,4 @@ npm run start
 
 ## License
 
-ISC
+[自定义许可 — 禁止商业使用和未授权分发](LICENSE)
