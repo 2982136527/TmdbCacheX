@@ -1321,6 +1321,21 @@
             }
         }
 
+        let discoverPage = 1;
+        let discoverTotalPages = 1;
+        let discoverLoading = false;
+        let discoverGenreId = 0;
+        let discoverGenreName = '';
+        let discoverType = 'movie';
+
+        function renderGenreItem(item) {
+            return `<div class="cursor-pointer group" onclick="closeModal(); setTimeout(() => openDetail(${item.tmdbId}), 100)">
+                ${item.posterPath ? `<img src="${item.posterPath}" class="w-full rounded-lg mb-1 object-cover group-hover:ring-2 ring-pink-500/50 transition-all" style="aspect-ratio:2/3" alt="" loading="lazy">` : '<div class="w-full rounded-lg bg-white/5 mb-1" style="aspect-ratio:2/3"></div>'}
+                <div class="text-[10px] text-slate-400 truncate">${item.title}</div>
+                ${item.voteAverage ? `<div class="text-[10px] text-amber-400">&#9733; ${item.voteAverage.toFixed(1)}</div>` : ''}
+            </div>`;
+        }
+
         async function searchByGenre(genreId, genreName, type) {
             const modal = document.getElementById('detailModal');
             const content = document.getElementById('modalContent');
@@ -1328,29 +1343,58 @@
             document.body.style.overflow = 'hidden';
             content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
 
+            discoverGenreId = genreId;
+            discoverGenreName = genreName;
+            discoverType = type === 'tv' ? 'tv' : 'movie';
+            discoverPage = 1;
+
             try {
-                const discoverType = type === 'tv' ? 'tv' : 'movie';
-                const data = await api(`/tmdb/discover?type=${discoverType}&genre=${genreId}`);
+                const data = await api(`/tmdb/discover?type=${discoverType}&genre=${genreId}&page=1`);
                 const items = data.results || [];
+                discoverTotalPages = data.totalPages || 1;
 
                 content.innerHTML = `
                     <div class="p-6">
                         <div class="flex items-center gap-3 mb-6">
                             <button onclick="closeModal()" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">返回</button>
                             <h2 class="text-lg font-bold text-white">${genreName}</h2>
-                            <span class="text-xs text-slate-500">${items.length} 部</span>
                         </div>
                         ${items.length === 0 ? '<div class="text-center py-20 text-slate-500">暂无结果</div>' : `
-                        <div class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(item => `
-                            <div class="cursor-pointer group" onclick="closeModal(); setTimeout(() => openDetail(${item.tmdbId}), 100)">
-                                ${item.posterPath ? `<img src="${item.posterPath}" class="w-full rounded-lg mb-1 object-cover group-hover:ring-2 ring-pink-500/50 transition-all" style="aspect-ratio:2/3" alt="">` : '<div class="w-full rounded-lg bg-white/5 mb-1" style="aspect-ratio:2/3"></div>'}
-                                <div class="text-[10px] text-slate-400 truncate">${item.title}</div>
-                                ${item.voteAverage ? `<div class="text-[10px] text-amber-400">&#9733; ${item.voteAverage.toFixed(1)}</div>` : ''}
-                            </div>`).join('')}</div>`}
+                        <div id="genreGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-3">${items.map(renderGenreItem).join('')}</div>
+                        <div id="genreLoadMore" class="mt-4 text-center">
+                            ${discoverPage < discoverTotalPages ? '<button onclick="loadMoreGenre()" class="btn-ghost rounded-xl px-6 py-2 text-sm">加载更多</button>' : '<span class="text-xs text-slate-500">已加载全部</span>'}
+                        </div>`}
                     </div>
                 `;
             } catch (e) {
                 content.innerHTML = '<div class="text-center py-20 text-red-400">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        async function loadMoreGenre() {
+            if (discoverLoading || discoverPage >= discoverTotalPages) return;
+            discoverLoading = true;
+            const btn = document.querySelector('#genreLoadMore button');
+            if (btn) { btn.textContent = '加载中...'; btn.disabled = true; }
+
+            try {
+                discoverPage++;
+                const data = await api(`/tmdb/discover?type=${discoverType}&genre=${discoverGenreId}&page=${discoverPage}`);
+                const items = data.results || [];
+                const grid = document.getElementById('genreGrid');
+                grid.insertAdjacentHTML('beforeend', items.map(renderGenreItem).join(''));
+
+                const loadMore = document.getElementById('genreLoadMore');
+                if (discoverPage >= discoverTotalPages) {
+                    loadMore.innerHTML = '<span class="text-xs text-slate-500">已加载全部</span>';
+                } else {
+                    loadMore.innerHTML = '<button onclick="loadMoreGenre()" class="btn-ghost rounded-xl px-6 py-2 text-sm">加载更多</button>';
+                }
+            } catch (e) {
+                const loadMore = document.getElementById('genreLoadMore');
+                loadMore.innerHTML = '<button onclick="loadMoreGenre()" class="btn-ghost rounded-xl px-6 py-2 text-sm text-red-400">重试</button>';
+            } finally {
+                discoverLoading = false;
             }
         }
 

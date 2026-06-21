@@ -434,9 +434,10 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
 
     // GET /admin/api/tmdb/discover - Discover by genre
     fastify.get('/admin/api/tmdb/discover', async (request, reply) => {
-        const query = request.query as { type?: string; genre?: string };
+        const query = request.query as { type?: string; genre?: string; page?: string };
         const type = query.type === 'tv' ? 'tv' : 'movie';
         const genre = query.genre;
+        const page = Math.max(1, parseInt(query.page || '1'));
         if (!genre) return { results: [] };
 
         const apiKey = config.tmdb.apiKey;
@@ -445,7 +446,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
 
         try {
             const { handleTmdbRequest } = await import('./proxy.js');
-            const urlPath = `3/discover/${type}?api_key=${apiKey}&language=${lang}&with_genres=${genre}&sort_by=popularity.desc&page=1`;
+            const urlPath = `3/discover/${type}?api_key=${apiKey}&language=${lang}&with_genres=${genre}&sort_by=popularity.desc&page=${page}`;
             const data = await handleTmdbRequest(urlPath, true);
 
             const results = (data.results || []).filter((item: any) => item.poster_path).map((item: any) => ({
@@ -456,7 +457,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
                 releaseDate: (type === 'movie' ? item.release_date : item.first_air_date) || '',
             }));
 
-            return { results };
+            return { results, page, totalPages: data.total_pages || 1 };
         } catch (e: any) {
             reply.code(500).send({ error: e.message || 'Discover failed' });
         }
