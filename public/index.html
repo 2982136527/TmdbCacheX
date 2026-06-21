@@ -122,6 +122,23 @@
         .episode-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
         .episode-row:last-child { border-bottom: none; }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+        /* Mobile responsive */
+        @media (max-width: 640px) {
+            .modal-box { width: 100vw; max-width: 100vw; max-height: 100vh; border-radius: 0; }
+            .modal-hero { height: 260px; border-radius: 0; }
+            .modal-poster-float { width: 90px; bottom: 12px; left: 12px; }
+            .modal-close { top: 10px; right: 10px; }
+            .cast-card { width: 64px; }
+            .cast-card img { width: 48px; height: 48px; }
+            .backdrop-thumb { width: 140px; }
+            .genre-chip { font-size: 10px; padding: 2px 8px; }
+            .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+            .tab-bar::-webkit-scrollbar { display: none; }
+            .tab-btn { white-space: nowrap; flex-shrink: 0; }
+            .detail-logo { left: 115px !important; max-width: 140px !important; }
+            .detail-table td, .detail-table th { max-width: 120px; }
+        }
     </style>
 </head>
 <body class="overflow-x-hidden">
@@ -129,14 +146,14 @@
 
     <div class="relative z-10 max-w-6xl mx-auto px-4 py-6">
         <!-- Header -->
-        <header class="flex items-center justify-between mb-8">
+        <header class="flex items-center justify-between mb-6 sm:mb-8">
             <div class="flex items-center gap-3">
-                <h1 class="text-2xl font-black tracking-wider text-gradient" style="font-family:'Orbitron',sans-serif">TmdbCacheX</h1>
+                <h1 class="text-xl sm:text-2xl font-black tracking-wider text-gradient" style="font-family:'Orbitron',sans-serif">TmdbCacheX</h1>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 sm:gap-3">
                 <span id="statusDot" class="dot dot-green"></span>
-                <span id="statusText" class="text-xs text-slate-400">运行中</span>
-                <a href="/" class="btn-ghost rounded-xl px-3 py-1.5 text-xs transition-all">返回代理</a>
+                <span id="statusText" class="text-xs text-slate-400 hidden sm:inline">运行中</span>
+                <a href="/" class="btn-ghost rounded-xl px-2 sm:px-3 py-1.5 text-xs transition-all">返回代理</a>
             </div>
         </header>
 
@@ -183,7 +200,7 @@
         </div>
 
         <!-- Tabs -->
-        <div class="flex items-center gap-1 p-1 rounded-full border border-white/[0.07] bg-black/10 mb-6 w-fit">
+        <div class="tab-bar flex items-center gap-1 p-1 rounded-full border border-white/[0.07] bg-black/10 mb-6 w-fit">
             <button class="tab-btn tab-active rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="cache">缓存管理</button>
             <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="posters">缓存预览</button>
             <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="warmer">Warmer 控制</button>
@@ -196,8 +213,8 @@
         <div id="tab-cache" class="tab-content fade-in">
             <div class="glass rounded-2xl p-6">
                 <!-- Search & Actions -->
-                <div class="flex flex-wrap items-center gap-3 mb-5">
-                    <input type="text" id="cacheSearch" placeholder="搜索 URL..." class="flex-1 min-w-[200px] text-sm">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3 mb-5">
+                    <input type="text" id="cacheSearch" placeholder="搜索 URL..." class="flex-1 min-w-[140px] text-sm">
                     <select id="cacheTypeFilter" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none">
                         <option value="">全部类型</option>
                         <option value="movie">电影</option>
@@ -234,8 +251,8 @@
         <!-- Tab: Poster Wall -->
         <div id="tab-posters" class="tab-content fade-in hidden">
             <div class="glass rounded-2xl p-6">
-                <div class="flex flex-wrap items-center gap-3 mb-5">
-                    <input type="text" id="posterSearchInput" placeholder="搜索标题..." onkeydown="if(event.key==='Enter')loadPosters(1)" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none w-48 placeholder:text-slate-600">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3 mb-5">
+                    <input type="text" id="posterSearchInput" placeholder="搜索标题..." onkeydown="if(event.key==='Enter')loadPosters(1)" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none w-full sm:w-48 placeholder:text-slate-600">
                     <select id="posterTypeFilter" class="text-sm bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-slate-300 outline-none">
                         <option value="all">全部</option>
                         <option value="movie">电影</option>
@@ -1181,7 +1198,7 @@
                         ${d.backdropPath ? `<img src="${d.backdropPath}" alt="">` : ''}
                         <div class="modal-hero-gradient"></div>
                         ${d.posterPath ? `<div class="modal-poster-float"><img src="${d.posterPath}" alt=""></div>` : ''}
-                        ${d.logoPath ? `<div class="absolute bottom-8 left-[170px] z-10 flex items-end"><img src="${d.logoPath}" class="max-w-[200px] max-h-[50px] object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]" alt=""></div>` : ''}
+                        ${d.logoPath ? `<div class="detail-logo absolute bottom-8 left-[170px] z-10 flex items-end"><img src="${d.logoPath}" class="max-w-[200px] max-h-[50px] object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]" alt=""></div>` : ''}
                     </div>
 
                     <div class="px-6 pb-6" style="padding-top:20px">
