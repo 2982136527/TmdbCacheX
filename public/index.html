@@ -133,7 +133,7 @@
             .cast-card img { width: 48px; height: 48px; }
             .backdrop-thumb { width: 140px; }
             .genre-chip { font-size: 10px; padding: 2px 8px; }
-            .tab-bar { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-wrap: nowrap !important; }
+            .tab-bar { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-wrap: nowrap !important; box-sizing: border-box; }
             .tab-bar::-webkit-scrollbar { display: none; }
             .tab-btn { white-space: nowrap; flex-shrink: 0; font-size: 12px; padding: 6px 12px; }
             .detail-logo { left: 115px !important; max-width: 140px !important; }
@@ -200,7 +200,7 @@
         </div>
 
         <!-- Tabs -->
-        <div class="tab-bar flex items-center gap-1 p-1 rounded-full border border-white/[0.07] bg-black/10 mb-6 w-fit overflow-x-auto">
+        <div class="tab-bar flex items-center gap-1 p-1 rounded-full border border-white/[0.07] bg-black/10 mb-6 sm:w-fit overflow-x-auto">
             <button class="tab-btn tab-active rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="cache">缓存管理</button>
             <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="posters">缓存预览</button>
             <button class="tab-btn tab-inactive rounded-full px-4 py-2 text-sm font-medium transition-all" data-tab="warmer">Warmer 控制</button>
