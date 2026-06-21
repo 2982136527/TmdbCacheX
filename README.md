@@ -92,4 +92,4 @@ npm run start
 
 ## License
 
-[自定义许可 — 禁止商业使用和未授权分发](LICENSE)
+[CC BY-NC-SA 4.0](LICENSE) — 署名-非商业性使用-相同方式共享
