@@ -432,6 +432,16 @@
                     </div>
                     <div class="flex items-center justify-between py-2 gap-3">
                         <div class="min-w-0">
+                            <label class="text-xs text-slate-400">后台图片代理</label>
+                            <p class="text-[10px] text-slate-600 mt-0.5">管理后台预览图片是否走代理，关闭后预览图直连 TMDB</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="configAdminProxyImagesInput" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500/80"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between py-2 gap-3">
+                        <div class="min-w-0">
                             <label class="text-xs text-slate-400">DNS 覆盖</label>
                             <p class="text-[10px] text-slate-600 mt-0.5">通过外部 DNS 解析 TMDB 域名，适用于 DNS 污染但能访问境外 DNS 的用户</p>
                         </div>
@@ -686,6 +696,7 @@
         // --- State ---
         let currentPage = 1;
         let currentTab = 'cache';
+        let useAdminProxy = true; // controlled by adminProxyImages config
 
         // --- API Helpers ---
         async function api(path, opts = {}) {
@@ -1017,6 +1028,8 @@
                 document.getElementById('configProxyInput').value = data.tmdb.httpProxy || '';
                 document.getElementById('configProxyImagesInput').checked = data.tmdb.proxyImages !== false;
                 document.getElementById('configResolveDnsInput').checked = data.tmdb.resolveTmdbDns === true;
+                document.getElementById('configAdminProxyImagesInput').checked = data.adminProxyImages !== false;
+                useAdminProxy = data.adminProxyImages !== false;
                 document.getElementById('configPortInput').value = data.server.port;
             } catch (e) {
                 console.error('Failed to load config:', e);
@@ -1033,6 +1046,7 @@
             const authKey = authKeyInput.value === maskKey(authKeyInput.dataset.realValue) ? authKeyInput.dataset.realValue : authKeyInput.value.trim();
             const proxyImages = document.getElementById('configProxyImagesInput').checked;
             const resolveTmdbDns = document.getElementById('configResolveDnsInput').checked;
+            const adminProxyImages = document.getElementById('configAdminProxyImagesInput').checked;
             const port = parseInt(document.getElementById('configPortInput').value);
 
             if (!apiKey || apiKey.length < 5) {
@@ -1051,7 +1065,7 @@
             try {
                 const data = await api('/config', {
                     method: 'PUT',
-                    body: JSON.stringify({ tmdb: { apiKey, language, httpProxy, authKey, proxyImages, resolveTmdbDns }, server: { port } }),
+                    body: JSON.stringify({ tmdb: { apiKey, language, httpProxy, authKey, proxyImages, resolveTmdbDns }, server: { port }, adminProxyImages }),
                 });
                 resultEl.className = 'mt-4 text-sm text-emerald-400';
                 resultEl.textContent = data.message || '保存成功';
@@ -1131,7 +1145,7 @@
             grid.innerHTML = Array(24).fill('<div class="skeleton"></div>').join('');
 
             try {
-                const data = await api(`/posters?page=${page}&limit=24&type=${type}&search=${encodeURIComponent(search)}&proxy=1`);
+                const data = await api(`/posters?page=${page}&limit=24&type=${type}&search=${encodeURIComponent(search)}&proxy=${useAdminProxy ? 1 : 0}`);
                 if (data.items.length === 0 && search) {
                     grid.innerHTML = `<div class="col-span-full text-center py-16">
                         <div class="text-slate-500 mb-3">缓存中未找到「${search}」</div>
@@ -1225,7 +1239,7 @@
             content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
 
             try {
-                const d = await api(`/posters/detail/${tmdbId}?proxy=1`);
+                const d = await api(`/posters/detail/${tmdbId}?proxy=${useAdminProxy ? 1 : 0}`);
                 const isMovie = d.type === 'movie';
                 const year = d.releaseDate ? d.releaseDate.substring(0, 4) : '';
                 const runtimeText = d.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m` : '';
@@ -1346,7 +1360,7 @@
             container.innerHTML = '<div class="skeleton h-32 rounded-xl"></div>';
 
             try {
-                const data = await api(`/posters/season/${tvId}/${seasonNumber}?proxy=1`);
+                const data = await api(`/posters/season/${tvId}/${seasonNumber}?proxy=${useAdminProxy ? 1 : 0}`);
                 container.innerHTML = `
                     <div class="glass rounded-xl p-4 fade-in">
                         <div class="flex items-center gap-3 mb-3">
@@ -1466,7 +1480,7 @@
             content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="skeleton w-full h-64"></div></div>';
 
             try {
-                const data = await api(`/tmdb/person/${personId}?proxy=1`);
+                const data = await api(`/tmdb/person/${personId}?proxy=${useAdminProxy ? 1 : 0}`);
                 const credits = data.combined_credits?.cast || [];
                 const sorted = credits.filter(c => c.poster_path).sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
 
@@ -1564,6 +1578,8 @@
         loadStats();
         loadCache(1);
         loadWarmerStatus();
+        // Load adminProxyImages setting on init
+        api('/config').then(d => { useAdminProxy = d.adminProxyImages !== false; }).catch(() => {});
 
         // Set docs URLs dynamically
         const docsBase = `${window.location.protocol}//${window.location.host}`;

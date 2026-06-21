@@ -546,6 +546,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             server: {
                 port: config.server.port,
             },
+            adminProxyImages: config.adminProxyImages,
         };
     });
 
@@ -563,6 +564,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             server: {
                 port: config.server.port,
             },
+            adminProxyImages: config.adminProxyImages,
         };
     });
 
@@ -571,6 +573,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
         const body = request.body as {
             tmdb?: { apiKey?: string; language?: string; httpProxy?: string; authKey?: string; proxyImages?: boolean; resolveTmdbDns?: boolean };
             server?: { port?: number };
+            adminProxyImages?: boolean;
         };
 
         // Build new config
@@ -586,6 +589,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             server: {
                 port: body?.server?.port || config.server.port,
             },
+            adminProxyImages: body?.adminProxyImages !== undefined ? body.adminProxyImages : config.adminProxyImages,
         };
 
         // Validate
@@ -612,7 +616,7 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
             fs.renameSync(tmpPath, configPath);
             // Apply API key and language changes in-memory (port requires restart)
             const portChanged = newConfig.server.port !== config.server.port;
-            updateConfig({ tmdb: { apiKey: newConfig.tmdb.apiKey, language: newConfig.tmdb.language, httpProxy: newConfig.tmdb.httpProxy, authKey: newConfig.tmdb.authKey, proxyImages: newConfig.tmdb.proxyImages, resolveTmdbDns: newConfig.tmdb.resolveTmdbDns } });
+            updateConfig({ tmdb: { apiKey: newConfig.tmdb.apiKey, language: newConfig.tmdb.language, httpProxy: newConfig.tmdb.httpProxy, authKey: newConfig.tmdb.authKey, proxyImages: newConfig.tmdb.proxyImages, resolveTmdbDns: newConfig.tmdb.resolveTmdbDns }, adminProxyImages: newConfig.adminProxyImages });
             return { success: true, message: portChanged ? '已保存，端口变更需重启服务生效' : '配置已即时生效' };
         } catch (e: any) {
             try { fs.unlinkSync(tmpPath); } catch {}

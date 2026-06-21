@@ -10,5 +10,6 @@
   "server": {
     "port": 3333
   },
-  "logRetentionDays": 30
+  "logRetentionDays": 30,
+  "adminProxyImages": true
 }
