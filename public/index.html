@@ -856,14 +856,15 @@
                     api('/stats'),
                     api('/logs/stats'),
                 ]);
-                document.getElementById('statTotal').textContent = stats.total.toLocaleString();
-                document.getElementById('statActive').textContent = stats.active.toLocaleString();
-                document.getElementById('statExpired').textContent = stats.expired.toLocaleString();
+                const fmtN = n => n >= 1e6 ? (n/1e6).toFixed(1).replace(/\.0$/,'') + 'm' : n >= 1000 ? (n/1e3).toFixed(1).replace(/\.0$/,'') + 'k' : n.toLocaleString();
+                document.getElementById('statTotal').textContent = fmtN(stats.total);
+                document.getElementById('statActive').textContent = fmtN(stats.active);
+                document.getElementById('statExpired').textContent = fmtN(stats.expired);
                 document.getElementById('statWarmer').innerHTML = `<span class="flex items-center gap-1"><span class="dot ${stats.uptime ? 'dot-green' : 'dot-yellow'}"></span>${stats.uptime.hours}h ${stats.uptime.minutes}m</span>`;
-                document.getElementById('statApiTotal').textContent = logStats.total.toLocaleString();
-                document.getElementById('statApiToday').textContent = logStats.today.toLocaleString();
+                document.getElementById('statApiTotal').textContent = fmtN(logStats.total);
+                document.getElementById('statApiToday').textContent = fmtN(logStats.today);
                 document.getElementById('statApiHitRate').textContent = logStats.hitRate + '%';
-                document.getElementById('statApiExternal').textContent = logStats.external.toLocaleString();
+                document.getElementById('statApiExternal').textContent = fmtN(logStats.external);
                 const dbMB = stats.dbSize / 1048576;
                 document.getElementById('statDbSize').textContent = dbMB >= 1000 ? (dbMB / 1024).toFixed(2) + ' GB' : dbMB.toFixed(1) + ' MB';
             } catch (e) {
