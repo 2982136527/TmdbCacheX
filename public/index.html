@@ -29,7 +29,8 @@
         .brand-gradient { background: linear-gradient(to right, #ec4899, #d946ef); }
         .text-gradient { background: linear-gradient(to right, #f472b6, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        #particleCanvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+        #particleCanvas { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; opacity: var(--canvas-opacity, 1); will-change: transform; transform: translateY(0); }
+        #effectCanvas { position: fixed; inset: 0; z-index: 2; pointer-events: none; will-change: transform; }
 
         .custom-select { position: relative; display: inline-block; }
         .custom-select-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 100px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.75rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; color: #cbd5e1; cursor: pointer; user-select: none; transition: all 0.15s; }
@@ -87,6 +88,77 @@
 
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Jelly Mode */
+        :root { --jelly: 0; }
+        @keyframes jellyIn { 0%{transform:scale(0.6);opacity:0} 30%{transform:scale(calc(1 + 0.08 * var(--jelly)));opacity:1} 50%{transform:scale(calc(1 - 0.06 * var(--jelly)))} 70%{transform:scale(calc(1 + 0.03 * var(--jelly)))} 85%{transform:scale(calc(1 - 0.01 * var(--jelly)))} 100%{transform:scale(1)} }
+        @keyframes jellyPress { 0%{transform:scale(1)} 15%{transform:scale(calc(1 - 0.12 * var(--jelly)))} 35%{transform:scale(calc(1 + 0.08 * var(--jelly)))} 55%{transform:scale(calc(1 - 0.04 * var(--jelly)))} 70%{transform:scale(calc(1 + 0.02 * var(--jelly)))} 100%{transform:scale(1)} }
+        @keyframes jellyHover { 0%{transform:scale(1)} 50%{transform:scale(calc(1 + 0.04 * var(--jelly)))} 100%{transform:scale(1)} }
+        .jelly-on .poster-card:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .btn-primary:active, .jelly-on .btn-ghost:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .genre-chip:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .tab-btn:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .glass:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .season-card:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .cast-card:active { animation: jellyPress var(--jelly-dur, 0.5s) ease; }
+        .jelly-on .poster-card:hover { transform: none; box-shadow: none; }
+        .jelly-on .btn-primary:hover, .jelly-on .btn-ghost:hover { transform: none; }
+        .jelly-on .fade-in { animation: jellyIn 0.45s ease; }
+        .jelly-on .custom-select-menu.show { animation: jellyIn 0.4s ease; }
+
+        /* Glow Mode — 光污染 (intensity via --glow: 0~1) */
+        @keyframes glowShift { 0%{filter:hue-rotate(0deg)} 100%{filter:hue-rotate(360deg)} }
+        @keyframes glowPulse { 0%,100%{opacity:.65;box-shadow:0 0 12px rgba(236,72,153,.4)} 50%{opacity:1;box-shadow:0 0 35px rgba(236,72,153,.7),0 0 60px rgba(168,85,247,.3)} }
+        @keyframes glowBreathe { 0%,100%{text-shadow:0 0 10px rgba(168,85,247,.6),0 0 30px rgba(236,72,153,.4),0 0 60px rgba(59,130,246,.3)} 50%{text-shadow:0 0 20px rgba(236,72,153,.8),0 0 50px rgba(168,85,247,.6),0 0 80px rgba(236,72,153,.4)} }
+        @keyframes glowBorder { 0%{border-color:rgba(168,85,247,.4)} 33%{border-color:rgba(236,72,153,.5)} 66%{border-color:rgba(59,130,246,.5)} 100%{border-color:rgba(168,85,247,.4)} }
+
+        body.glow-on { filter: saturate(calc(1 + 0.6 * var(--glow,1))) brightness(calc(1 + 0.12 * var(--glow,1))); }
+        body.glow-on h1, body.glow-on h2, body.glow-on h3 { animation: glowBreathe calc(4.5s - 2s * var(--glow,1)) ease-in-out infinite; opacity: calc(0.5 + 0.5 * var(--glow,1)); }
+        body.glow-on .glass { box-shadow: 0 0 calc(20px * var(--glow,1)) rgba(168,85,247,.35), 0 0 calc(45px * var(--glow,1)) rgba(236,72,153,.18), 0 0 calc(80px * var(--glow,1)) rgba(59,130,246,.08), inset 0 0 calc(25px * var(--glow,1)) rgba(168,85,247,.06); animation: glowShift calc(8s - 4s * var(--glow,1)) linear infinite; }
+        body.glow-on .poster-card { box-shadow: 0 0 calc(16px * var(--glow,1)) rgba(236,72,153,.4), 0 0 calc(35px * var(--glow,1)) rgba(168,85,247,.25), 0 0 calc(60px * var(--glow,1)) rgba(59,130,246,.1); animation: glowShift calc(10s - 4s * var(--glow,1)) linear infinite; border-color: rgba(168,85,247, calc(0.2 * var(--glow,1))); }
+        body.glow-on .poster-card:hover { box-shadow: 0 0 calc(30px * var(--glow,1)) rgba(236,72,153,.65), 0 0 calc(60px * var(--glow,1)) rgba(168,85,247,.4), 0 0 calc(100px * var(--glow,1)) rgba(59,130,246,.25); }
+        body.glow-on .btn-primary { box-shadow: 0 0 calc(15px * var(--glow,1)) rgba(236,72,153,.55), 0 0 calc(35px * var(--glow,1)) rgba(236,72,153,.3), 0 0 calc(60px * var(--glow,1)) rgba(168,85,247,.15); animation: glowPulse calc(3s - 1.5s * var(--glow,1)) ease-in-out infinite; }
+        body.glow-on .btn-ghost { box-shadow: 0 0 calc(10px * var(--glow,1)) rgba(168,85,247,.35); border-color: rgba(168,85,247, calc(0.3 * var(--glow,1))); }
+        body.glow-on .genre-chip { box-shadow: 0 0 calc(10px * var(--glow,1)) rgba(99,102,241,.45), 0 0 calc(20px * var(--glow,1)) rgba(236,72,153,.15); animation: glowShift calc(7s - 3s * var(--glow,1)) linear infinite; }
+        body.glow-on .badge { box-shadow: 0 0 calc(10px * var(--glow,1)) rgba(59,130,246,.55), 0 0 calc(20px * var(--glow,1)) rgba(168,85,247,.2); }
+        body.glow-on .season-card, body.glow-on .cast-card { box-shadow: 0 0 calc(14px * var(--glow,1)) rgba(168,85,247,.3), 0 0 calc(30px * var(--glow,1)) rgba(236,72,153,.12); animation: glowShift calc(9s - 4s * var(--glow,1)) linear infinite; }
+        body.glow-on .tab-bar { box-shadow: 0 0 calc(15px * var(--glow,1)) rgba(168,85,247,.25), 0 0 calc(30px * var(--glow,1)) rgba(236,72,153,.12); border-color: rgba(168,85,247, calc(0.25 * var(--glow,1))) !important; animation: glowBorder calc(6s - 3s * var(--glow,1)) linear infinite; }
+        body.glow-on .tab-btn { text-shadow: 0 0 calc(8px * var(--glow,1)) rgba(168,85,247,.5); }
+        body.glow-on .tab-btn.tab-active { text-shadow: 0 0 calc(12px * var(--glow,1)) rgba(236,72,153,.7), 0 0 calc(25px * var(--glow,1)) rgba(168,85,247,.5); background: linear-gradient(to right, rgba(236,72,153, calc(0.25 + 0.2 * var(--glow,1))), rgba(217,70,239, calc(0.2 + 0.15 * var(--glow,1)))) !important; box-shadow: 0 0 calc(18px * var(--glow,1)) rgba(236,72,153,.35); border-color: rgba(236,72,153, calc(0.5 + 0.3 * var(--glow,1))) !important; }
+        body.glow-on .dot-green, body.glow-on .dot-red, body.glow-on .dot-yellow { transform: scale(calc(1 + 0.3 * var(--glow,1))); filter: brightness(calc(1 + 0.5 * var(--glow,1))); }
+        body.glow-on::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 20% 50%, rgba(168,85,247, calc(0.06 * var(--glow,1))) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(236,72,153, calc(0.05 * var(--glow,1))) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(59,130,246, calc(0.05 * var(--glow,1))) 0%, transparent 50%); animation: glowShift calc(12s - 6s * var(--glow,1)) linear infinite; }
+
+        /* === Effects Workshop — 特效工坊 === */
+        /* Screen Shake */
+        @keyframes shakeX { 0%,100%{transform:translate(0)} 25%{transform:translate(-4px,2px)} 50%{transform:translate(3px,-3px)} 75%{transform:translate(-2px,4px)} }
+        #mainContent.shake-on { animation: shakeX 0.15s linear infinite; will-change: transform; }
+
+        /* 3D Tilt */
+        body.tilt-on { perspective: 1200px; }
+        body.tilt-on #mainContent { transition: transform 0.1s ease-out; transform-style: preserve-3d; will-change: transform; }
+
+        /* CRT — scanlines + flicker + chromatic aberration */
+        body.crt-on { animation: crtFlicker 8s step-end infinite; filter: contrast(1.1) saturate(0.85); }
+        @keyframes crtFlicker {
+            0%{opacity:1} 3%{opacity:0.94} 5%{opacity:1} 15%{opacity:1} 16%{opacity:0.91} 17%{opacity:1}
+            40%{opacity:1} 41%{opacity:0.88} 42%{opacity:0.96} 43%{opacity:1}
+            65%{opacity:1} 66%{opacity:0.93} 68%{opacity:1} 85%{opacity:1} 86%{opacity:0.9} 88%{opacity:1}
+        }
+        #crtOverlay { position: fixed; inset: 0; pointer-events: none; z-index: 9998; display: none; overflow: hidden; }
+        #crtOverlay.active { display: block; }
+        #crtOverlay::before {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(0deg,
+                rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px,
+                transparent 1px, transparent 3px
+            );
+            mix-blend-mode: multiply;
+        }
+        body.crt-on #mainContent { text-shadow: 0.5px 0 rgba(255,80,80,0.1), -0.5px 0 rgba(80,80,255,0.1); }
+        body.crt-on h1, body.crt-on h2, body.crt-on h3 { text-shadow: 1px 0 rgba(255,60,60,0.15), -1px 0 rgba(60,60,255,0.15); }
+        body.crt-on .glass, body.crt-on .modal-box { box-shadow: inset 0 0 80px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.04) !important; }
+        body.crt-on .poster-card { filter: contrast(1.08) brightness(0.95); }
+        body.crt-on input, body.crt-on textarea { caret-color: #0f0; }
 
         .poster-card { position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.08); transition: all 0.25s; }
         .poster-card:hover { border-color: rgba(236,72,153,0.5); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
@@ -151,8 +223,10 @@
 </head>
 <body class="overflow-x-hidden">
     <canvas id="particleCanvas"></canvas>
+    <canvas id="effectCanvas"></canvas>
+    <div id="crtOverlay"></div>
 
-    <div class="relative z-10 max-w-6xl mx-auto px-4 py-6">
+    <div id="mainContent" class="relative z-10 max-w-6xl mx-auto px-4 py-6">
         <!-- Header -->
         <header class="flex items-center justify-between mb-6 sm:mb-8">
             <div class="flex items-center gap-3">
@@ -466,6 +540,46 @@
                     </div>
                 </div>
                 <div id="configSaveResult" class="mt-4 hidden"></div>
+
+                <div class="border-t border-white/[0.06] mt-6 pt-6">
+                    <h4 class="text-sm font-medium text-slate-300 mb-3">特效工坊</h4>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-3">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-400">果冻模式</span>
+                                <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="jellyToggle" class="sr-only peer"><div class="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500/80"></div></label>
+                            </div>
+                            <div id="jellySliderWrap" style="display:none" class="mt-1">
+                                <input type="range" id="jellySlider" min="0" max="100" value="50" class="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-pink-500">
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-400">炫光模式</span>
+                                <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="glowToggle" class="sr-only peer"><div class="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500/80"></div></label>
+                            </div>
+                            <div id="glowSliderWrap" style="display:none" class="mt-1">
+                                <input type="range" id="glowSlider" min="0" max="100" value="80" class="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-violet-500">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400">屏幕震动</span>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="fxShake" class="sr-only peer"><div class="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500/80"></div></label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400">3D 视差</span>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="fxTilt" class="sr-only peer"><div class="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500/80"></div></label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400">CRT 老电视</span>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="fxCrt" class="sr-only peer"><div class="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500/80"></div></label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400">樱花飘落</span>
+                            <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="fxSakura" class="sr-only peer"><div class="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white/50 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500/80"></div></label>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="border-t border-white/[0.06] mt-6 pt-6">
                     <div class="flex items-center justify-between">
@@ -1581,6 +1695,211 @@
         // Load adminProxyImages setting on init
         api('/config').then(d => { useAdminProxy = d.adminProxyImages !== false; }).catch(() => {});
 
+        // Jelly Mode init (persisted in localStorage)
+        (function initJelly() {
+            const saved = localStorage.getItem('jellyMode');
+            const jellyOn = saved === 'on';
+            const jellyIntensity = parseInt(localStorage.getItem('jellyIntensity') || '50');
+            const toggle = document.getElementById('jellyToggle');
+            const slider = document.getElementById('jellySlider');
+            const sliderWrap = document.getElementById('jellySliderWrap');
+
+            function applyJelly(on, intensity) {
+                document.body.classList.toggle('jelly-on', on);
+                document.documentElement.style.setProperty('--jelly', on ? (intensity / 100) : 0);
+                document.documentElement.style.setProperty('--jelly-dur', on ? (intensity / 50).toFixed(2) + 's' : '0.5s');
+                toggle.checked = on;
+                slider.value = intensity;
+                sliderWrap.style.display = on ? 'block' : 'none';
+            }
+
+            toggle.addEventListener('change', () => {
+                const on = toggle.checked;
+                localStorage.setItem('jellyMode', on ? 'on' : 'off');
+                applyJelly(on, parseInt(slider.value));
+            });
+
+            slider.addEventListener('input', () => {
+                const v = parseInt(slider.value);
+                localStorage.setItem('jellyIntensity', v);
+                applyJelly(true, v);
+            });
+
+            applyJelly(jellyOn, jellyIntensity);
+        })();
+
+        // Glow Mode init (persisted in localStorage)
+        (function initGlow() {
+            const saved = localStorage.getItem('glowMode');
+            const on = saved === 'on';
+            const intensity = parseInt(localStorage.getItem('glowIntensity') || '80');
+            const toggle = document.getElementById('glowToggle');
+            const slider = document.getElementById('glowSlider');
+            const sliderWrap = document.getElementById('glowSliderWrap');
+
+            function applyGlow(on, val) {
+                const g = on ? (val / 100) : 0;
+                document.body.classList.toggle('glow-on', on);
+                document.documentElement.style.setProperty('--glow', g);
+                document.documentElement.style.setProperty('--canvas-opacity', on ? (0.3 + 0.2 * g) : 1);
+                toggle.checked = on;
+                slider.value = val;
+                sliderWrap.style.display = on ? 'block' : 'none';
+            }
+
+            toggle.addEventListener('change', () => {
+                const on = toggle.checked;
+                localStorage.setItem('glowMode', on ? 'on' : 'off');
+                applyGlow(on, parseInt(slider.value));
+            });
+
+            slider.addEventListener('input', () => {
+                const v = parseInt(slider.value);
+                localStorage.setItem('glowIntensity', v);
+                applyGlow(true, v);
+            });
+
+            applyGlow(on, intensity);
+        })();
+
+        // === Effects Workshop — 特效工坊 ===
+        // Helper: simple toggle effect
+        function initFx(key, cls, elId) {
+            const toggle = document.getElementById(elId);
+            const on = localStorage.getItem(key) === 'on';
+            function apply(v) { document.body.classList.toggle(cls, v); toggle.checked = v; }
+            toggle.addEventListener('change', () => { localStorage.setItem(key, toggle.checked ? 'on' : 'off'); apply(toggle.checked); });
+            apply(on);
+        }
+
+        // 1. Screen Shake (on #mainContent, not body, to avoid breaking fixed canvas)
+        (function() {
+            const toggle = document.getElementById('fxShake');
+            const main = document.getElementById('mainContent');
+            const on = localStorage.getItem('fxShake') === 'on';
+            function apply(v) { main.classList.toggle('shake-on', v); toggle.checked = v; }
+            toggle.addEventListener('change', () => { localStorage.setItem('fxShake', toggle.checked ? 'on' : 'off'); apply(toggle.checked); });
+            document.addEventListener('click', e => {
+                if (!main.classList.contains('shake-on')) return;
+                if (e.target.closest('button, .tab-btn, .btn-primary, .btn-ghost')) {
+                    main.style.animation = 'none';
+                    main.offsetHeight;
+                    main.style.animation = '';
+                }
+            });
+            apply(on);
+        })();
+
+        // 2. CRT — scanlines + flicker
+        (function() {
+            const toggle = document.getElementById('fxCrt');
+            const overlay = document.getElementById('crtOverlay');
+            const on = localStorage.getItem('fxCrt') === 'on';
+            function apply(v) { document.body.classList.toggle('crt-on', v); overlay.classList.toggle('active', v); toggle.checked = v; }
+            toggle.addEventListener('change', () => { localStorage.setItem('fxCrt', toggle.checked ? 'on' : 'off'); apply(toggle.checked); });
+            apply(on);
+        })();
+
+        // 3. 3D Tilt
+        (function initTilt() {
+            const toggle = document.getElementById('fxTilt');
+            const on = localStorage.getItem('fxTilt') === 'on';
+            const main = document.getElementById('mainContent');
+            function apply(v) {
+                document.body.classList.toggle('tilt-on', v);
+                toggle.checked = v;
+                if (!v && main) { main.style.transform = ''; }
+            }
+            let tiltRaf = 0;
+            document.addEventListener('mousemove', e => {
+                if (!document.body.classList.contains('tilt-on') || !main) return;
+                if (tiltRaf) return;
+                tiltRaf = requestAnimationFrame(() => {
+                    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+                    const rx = ((e.clientY - cy) / cy) * -5;
+                    const ry = ((e.clientX - cx) / cx) * 5;
+                    main.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
+                    tiltRaf = 0;
+                });
+            });
+            toggle.addEventListener('change', () => { localStorage.setItem('fxTilt', toggle.checked ? 'on' : 'off'); apply(toggle.checked); });
+            apply(on);
+        })();
+
+        // 5. Sakura (canvas)
+        (function initSakura() {
+            const toggle = document.getElementById('fxSakura');
+            const on = localStorage.getItem('fxSakura') === 'on';
+            const cvs = document.getElementById('effectCanvas');
+            const ctx = cvs.getContext('2d');
+            let animId;
+            const petals = [];
+            const PETAL_COUNT = 35;
+
+            function resize() { cvs.width = window.innerWidth; cvs.height = window.innerHeight; }
+
+            function spawnPetal() {
+                return {
+                    x: Math.random() * cvs.width,
+                    y: -20,
+                    r: Math.random() * 6 + 4,
+                    vx: Math.random() * 0.8 - 0.4,
+                    vy: Math.random() * 1.2 + 0.6,
+                    rot: Math.random() * Math.PI * 2,
+                    rotV: (Math.random() - 0.5) * 0.04,
+                    alpha: Math.random() * 0.4 + 0.3,
+                    swing: Math.random() * Math.PI * 2,
+                    swingV: Math.random() * 0.02 + 0.01,
+                };
+            }
+
+            let lastDraw = 0;
+            function draw(ts) {
+                animId = requestAnimationFrame(draw);
+                if (ts - lastDraw < 33) return; // 30fps cap
+                lastDraw = ts;
+                ctx.clearRect(0, 0, cvs.width, cvs.height);
+                if (petals.length < PETAL_COUNT) petals.push(spawnPetal());
+                for (let i = petals.length - 1; i >= 0; i--) {
+                    const p = petals[i];
+                    p.swing += p.swingV;
+                    p.x += p.vx + Math.sin(p.swing) * 0.8;
+                    p.y += p.vy;
+                    p.rot += p.rotV;
+                    if (p.y > cvs.height + 20) { petals.splice(i, 1); continue; }
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rot);
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fillStyle = '#ffb7c5';
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, p.r, p.r * 0.6, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            function apply(v) {
+                toggle.checked = v;
+                if (v) {
+                    petals.length = 0;
+                    resize();
+                    window.addEventListener('resize', resize);
+                    draw();
+                } else {
+                    stop();
+                }
+            }
+            function stop() {
+                if (animId) cancelAnimationFrame(animId);
+                animId = null;
+                window.removeEventListener('resize', resize);
+                ctx.clearRect(0, 0, cvs.width, cvs.height);
+            }
+            toggle.addEventListener('change', () => { localStorage.setItem('fxSakura', toggle.checked ? 'on' : 'off'); apply(toggle.checked); });
+            apply(on);
+        })();
+
         // Set docs URLs dynamically
         const docsBase = `${window.location.protocol}//${window.location.host}`;
         const docsBaseUrlEl = document.getElementById('docsBaseUrl');
@@ -1609,13 +1928,14 @@
         resize();
         window.addEventListener('resize', resize);
 
-        // --- Floating particles ---
+        // --- Floating particles (page coordinates) ---
+        const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
         const FLOAT_COUNT = 60;
         const floaters = [];
         for (let i = 0; i < FLOAT_COUNT; i++) {
             floaters.push({
                 x: Math.random() * W,
-                y: Math.random() * H,
+                y: Math.random() * docH,
                 r: Math.random() * 2 + 0.5,
                 vx: (Math.random() - 0.5) * 0.3,
                 vy: (Math.random() - 0.5) * 0.3 - 0.15,
@@ -1624,49 +1944,60 @@
             });
         }
 
-        // --- Mouse ripple particles ---
+        // --- Mouse ripple particles (page coordinates) ---
         const ripples = [];
         let mouseX = -100, mouseY = -100, lastMouseX = -100, lastMouseY = -100;
 
+        const MAX_RIPPLES = 120;
+        let mouseRaf = 0;
         document.addEventListener('mousemove', e => {
-            mouseX = e.clientX; mouseY = e.clientY;
-            const dx = mouseX - lastMouseX, dy = mouseY - lastMouseY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 8) {
-                lastMouseX = mouseX; lastMouseY = mouseY;
-                // Emit ripple particles
-                const count = Math.min(4, Math.floor(dist / 10) + 1);
-                for (let i = 0; i < count; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const speed = Math.random() * 1.5 + 0.5;
-                    ripples.push({
-                        x: mouseX + (Math.random() - 0.5) * 10,
-                        y: mouseY + (Math.random() - 0.5) * 10,
-                        vx: Math.cos(angle) * speed,
-                        vy: Math.sin(angle) * speed,
-                        r: Math.random() * 3 + 1.5,
-                        life: 1,
-                        decay: Math.random() * 0.015 + 0.01,
-                        color: '236,72,153'
-                    });
+            if (mouseRaf) return;
+            mouseRaf = requestAnimationFrame(() => {
+                mouseRaf = 0;
+                const sy = window.scrollY;
+                mouseX = e.clientX; mouseY = e.clientY + sy;
+                const dx = mouseX - lastMouseX, dy = mouseY - lastMouseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 8) {
+                    lastMouseX = mouseX; lastMouseY = mouseY;
+                    const count = Math.min(3, Math.floor(dist / 12) + 1);
+                    for (let i = 0; i < count; i++) {
+                        if (ripples.length >= MAX_RIPPLES) break;
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = Math.random() * 1.5 + 0.5;
+                        ripples.push({
+                            x: mouseX + (Math.random() - 0.5) * 10,
+                            y: mouseY + (Math.random() - 0.5) * 10,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            r: Math.random() * 3 + 1.5,
+                            life: 1,
+                            decay: Math.random() * 0.015 + 0.01,
+                            color: '236,72,153'
+                        });
+                    }
                 }
-            }
+            });
         });
 
         function animate() {
+            const sy = window.scrollY;
+            canvas.style.transform = `translateY(${sy}px)`;
+
             ctx.clearRect(0, 0, W, H);
 
-            // Draw floating particles
+            // Draw floating particles (convert page coords to canvas coords)
             for (const p of floaters) {
                 p.x += p.vx; p.y += p.vy;
-                if (p.x < -10) p.x = W + 10;
-                if (p.x > W + 10) p.x = -10;
-                if (p.y < -10) p.y = H + 10;
-                if (p.y > H + 10) p.y = -10;
+                if (p.y < -10) p.y = docH + 10;
+                if (p.y > docH + 10) p.y = -10;
 
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                const cy = p.y - sy;
+                if (cy < -20 || cy > H + 20) continue;
+
                 ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
+                ctx.beginPath();
+                ctx.arc(p.x, cy, p.r, 0, Math.PI * 2);
                 ctx.fill();
             }
 
@@ -1678,9 +2009,12 @@
                 p.life -= p.decay;
                 if (p.life <= 0) { ripples.splice(i, 1); continue; }
 
+                const cy = p.y - sy;
+                if (cy < -20 || cy > H + 20) continue;
+
+                ctx.fillStyle = `rgba(${p.color},${(p.life * 0.6).toFixed(2)})`;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${p.color},${p.life * 0.6})`;
+                ctx.arc(p.x, cy, p.r * p.life, 0, Math.PI * 2);
                 ctx.fill();
             }
 
