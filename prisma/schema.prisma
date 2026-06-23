@@ -27,4 +27,8 @@ model ApiLog {
   ip        String?
   ua        String?
   createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([hit])
+  @@index([source])
 }

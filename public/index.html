@@ -852,21 +852,27 @@
         // --- Stats ---
         async function loadStats() {
             try {
-                const [stats, logStats] = await Promise.all([
+                const [r1, r2] = await Promise.allSettled([
                     api('/stats'),
                     api('/logs/stats'),
                 ]);
+                const stats = r1.status === 'fulfilled' ? r1.value : null;
+                const logStats = r2.status === 'fulfilled' ? r2.value : null;
                 const fmtN = n => n >= 1e6 ? (n/1e6).toFixed(1).replace(/\.0$/,'') + 'm' : n >= 1000 ? (n/1e3).toFixed(1).replace(/\.0$/,'') + 'k' : n.toLocaleString();
-                document.getElementById('statTotal').textContent = fmtN(stats.total);
-                document.getElementById('statActive').textContent = fmtN(stats.active);
-                document.getElementById('statExpired').textContent = fmtN(stats.expired);
-                document.getElementById('statWarmer').innerHTML = `<span class="flex items-center gap-1"><span class="dot ${stats.uptime ? 'dot-green' : 'dot-yellow'}"></span>${stats.uptime.hours}h ${stats.uptime.minutes}m</span>`;
-                document.getElementById('statApiTotal').textContent = fmtN(logStats.total);
-                document.getElementById('statApiToday').textContent = fmtN(logStats.today);
-                document.getElementById('statApiHitRate').textContent = logStats.hitRate + '%';
-                document.getElementById('statApiExternal').textContent = fmtN(logStats.external);
-                const dbMB = stats.dbSize / 1048576;
-                document.getElementById('statDbSize').textContent = dbMB >= 1000 ? (dbMB / 1024).toFixed(2) + ' GB' : dbMB.toFixed(1) + ' MB';
+                if (stats) {
+                    document.getElementById('statTotal').textContent = fmtN(stats.total);
+                    document.getElementById('statActive').textContent = fmtN(stats.active);
+                    document.getElementById('statExpired').textContent = fmtN(stats.expired);
+                    document.getElementById('statWarmer').innerHTML = `<span class="flex items-center gap-1"><span class="dot ${stats.uptime ? 'dot-green' : 'dot-yellow'}"></span>${stats.uptime.hours}h ${stats.uptime.minutes}m</span>`;
+                    const dbMB = stats.dbSize / 1048576;
+                    document.getElementById('statDbSize').textContent = dbMB >= 1000 ? (dbMB / 1024).toFixed(2) + ' GB' : dbMB.toFixed(1) + ' MB';
+                }
+                if (logStats) {
+                    document.getElementById('statApiTotal').textContent = fmtN(logStats.total);
+                    document.getElementById('statApiToday').textContent = fmtN(logStats.today);
+                    document.getElementById('statApiHitRate').textContent = logStats.hitRate + '%';
+                    document.getElementById('statApiExternal').textContent = fmtN(logStats.external);
+                }
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
