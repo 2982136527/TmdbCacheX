@@ -134,8 +134,8 @@
         #mainContent.shake-on { animation: shakeX 0.15s linear infinite; will-change: transform; }
 
         /* 3D Tilt */
-        body.tilt-on { perspective: 1200px; }
-        body.tilt-on #mainContent { transition: transform 0.1s ease-out; transform-style: preserve-3d; will-change: transform; }
+        body.tilt-on #mainContent,
+        body.tilt-on .modal-backdrop.active .modal-box { transition: transform 0.1s ease-out; will-change: transform; }
 
         /* CRT — scanlines + flicker + chromatic aberration */
         body.crt-on { animation: crtFlicker 8s step-end infinite; filter: contrast(1.1) saturate(0.85); }
@@ -1673,6 +1673,8 @@
         function closeModal() {
             document.getElementById('detailModal').classList.remove('active');
             document.body.style.overflow = '';
+            const mb = document.querySelector('#detailModal .modal-box');
+            if (mb) mb.style.transform = '';
         }
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
@@ -1845,7 +1847,11 @@
             function apply(v) {
                 document.body.classList.toggle('tilt-on', v);
                 toggle.checked = v;
-                if (!v && main) { main.style.transform = ''; }
+                if (!v) {
+                    if (main) main.style.transform = '';
+                    const mb = document.querySelector('.modal-backdrop .modal-box');
+                    if (mb) mb.style.transform = '';
+                }
             }
             let tiltRaf = 0;
             document.addEventListener('mousemove', e => {
@@ -1855,7 +1861,10 @@
                     const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
                     const rx = ((e.clientY - cy) / cy) * -5;
                     const ry = ((e.clientX - cx) / cx) * 5;
-                    main.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
+                    const t = `perspective(1200px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+                    main.style.transform = t;
+                    const modalBox = document.querySelector('.modal-backdrop.active .modal-box');
+                    if (modalBox) modalBox.style.transform = `perspective(1200px) translateY(0) scale(1) rotateX(${rx}deg) rotateY(${ry}deg)`;
                     tiltRaf = 0;
                 });
             });
