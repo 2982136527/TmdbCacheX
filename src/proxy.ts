@@ -6,7 +6,7 @@ import { getDnsAgent } from './dns-resolver.js';
 
 export const prisma = new PrismaClient();
 const TMDB_BASE_URL = 'https://api.themoviedb.org';
-const CACHE_TTL_MS = 7 * 24 * 3600 * 1000; // 7 days
+const CACHE_TTL_MS = 90 * 24 * 3600 * 1000; // 90 days
 
 export function getProxyConfig(): { proxy?: { host: string; port: number; protocol: string } } {
     const p = config.tmdb.httpProxy;
@@ -77,9 +77,9 @@ export async function handleTmdbRequest(urlPath: string, isBackground = false): 
     });
 
     if (cached) {
-        // Check TTL
+        // Check TTL (skip if cache TTL is disabled)
         const age = Date.now() - new Date(cached.updatedAt).getTime();
-        if (age < CACHE_TTL_MS) {
+        if (!config.enableCacheTtl || age < CACHE_TTL_MS) {
             const data = JSON.parse(cached.response);
             if (isBackground) {
                 // Still trigger prefetch for list pages even on cache hit
@@ -176,14 +176,13 @@ export async function handleTmdbRequest(urlPath: string, isBackground = false): 
         // 3. Save to Cache (cache stringify result to avoid double work)
         const responseStr = JSON.stringify(data);
         const now = new Date();
+        const expiresAt = config.enableCacheTtl
+            ? new Date(now.getTime() + CACHE_TTL_MS)
+            : new Date('2099-12-31');
         await prisma.tmdbCache.upsert({
             where: { url: cacheKey },
-            update: { response: responseStr, expiresAt: new Date(now.getTime() + CACHE_TTL_MS) },
-            create: {
-                url: cacheKey,
-                response: responseStr,
-                expiresAt: new Date(now.getTime() + CACHE_TTL_MS)
-            }
+            update: { response: responseStr, expiresAt },
+            create: { url: cacheKey, response: responseStr, expiresAt }
         });
 
         const title = data.title || data.name;

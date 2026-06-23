@@ -1,6 +1,6 @@
 
 import fs from 'fs';
-import { handleTmdbRequest } from './proxy.js';
+import { handleTmdbRequest, prisma } from './proxy.js';
 import { config } from './config.js';
 
 interface WarmerState {
@@ -36,6 +36,11 @@ export class CacheWarmer {
         // Start CHANGES loop (Incremental sync)
         this.startChangesLoop().catch(err => console.error(`[CHANGES-LOOP] Crash: ${err.message}`));
 
+        // Start EXPIRE loop (Refresh expired cache, only if TTL enabled)
+        if (config.enableCacheTtl) {
+            this.startExpireLoop().catch(err => console.error(`[EXPIRE-LOOP] Crash: ${err.message}`));
+        }
+
         // Start COLD loop (Archive)
         this.startColdLoop().catch(err => console.error(`[COLD-LOOP] Crash: ${err.message}`));
     }
@@ -56,6 +61,96 @@ export class CacheWarmer {
                 await new Promise(r => setTimeout(r, 60 * 1000)); // Retry after minute if crash
             }
         }
+    }
+
+    private async startExpireLoop() {
+        console.log('[EXPIRE-LOOP] 🔄 Expired Cache Refresh Started');
+        while (this.isRunning && config.enableCacheTtl) {
+            try {
+                const count = await this.runExpireRefresh();
+                // Adaptive interval: more pending = shorter wait, none = long wait
+                const interval = count === 0 ? 12 * 3600 * 1000
+                    : count >= 1000 ? 30 * 60 * 1000
+                    : count >= 500 ? 1 * 3600 * 1000
+                    : 6 * 3600 * 1000;
+                const label = interval >= 3600000 ? (interval / 3600000) + 'h' : (interval / 60000) + 'min';
+                console.log(`[EXPIRE-LOOP] ✅ Refresh complete. Sleeping for ${label} hours...`);
+                await new Promise(r => setTimeout(r, interval));
+            } catch (e) {
+                console.error('[EXPIRE-LOOP] Error:', e);
+                await new Promise(r => setTimeout(r, 60 * 1000));
+            }
+        }
+    }
+
+    private async runExpireRefresh(): Promise<number> {
+        const now = Date.now();
+        const expired = await prisma.tmdbCache.findMany({
+            where: {
+                expiresAt: { lt: new Date(now) },
+                OR: [
+                    { url: { contains: '/movie/' } },
+                    { url: { contains: '/tv/' } },
+                    { url: { contains: '/person/' } },
+                ],
+            },
+            select: { url: true },
+            orderBy: { expiresAt: 'asc' },
+            take: 1000,
+        });
+
+        if (expired.length > 0) {
+            console.log(`[EXPIRE-LOOP] Found ${expired.length} expired entries, refreshing...`);
+            let refreshed = 0;
+            for (const item of expired) {
+                if (!this.isRunning) break;
+                try {
+                    await handleTmdbRequest(item.url, true);
+                    refreshed++;
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (e: any) {
+                    console.error(`[EXPIRE-LOOP] Failed ${item.url}: ${e.message}`);
+                }
+            }
+            console.log(`[EXPIRE-LOOP] ✅ Refreshed ${refreshed}/${expired.length} expired entries.`);
+            return expired.length;
+        }
+
+        // No expired entries — proactively refresh entries expiring within 7 days
+        const soon = new Date(now + 7 * 24 * 3600 * 1000);
+        const pending = await prisma.tmdbCache.findMany({
+            where: {
+                expiresAt: { lt: soon, gt: new Date(now) },
+                OR: [
+                    { url: { contains: '/movie/' } },
+                    { url: { contains: '/tv/' } },
+                    { url: { contains: '/person/' } },
+                ],
+            },
+            select: { url: true },
+            orderBy: { expiresAt: 'asc' },
+            take: 200,
+        });
+
+        if (pending.length === 0) {
+            console.log('[EXPIRE-LOOP] No entries to refresh.');
+            return 0;
+        }
+
+        console.log(`[EXPIRE-LOOP] Proactively refreshing ${pending.length} entries expiring within 7 days...`);
+        let refreshed = 0;
+        for (const item of pending) {
+            if (!this.isRunning) break;
+            try {
+                await handleTmdbRequest(item.url, true);
+                refreshed++;
+                await new Promise(r => setTimeout(r, 1000));
+            } catch (e: any) {
+                console.error(`[EXPIRE-LOOP] Failed ${item.url}: ${e.message}`);
+            }
+        }
+        console.log(`[EXPIRE-LOOP] ✅ Proactively refreshed ${refreshed}/${pending.length} entries.`);
+        return 0; // Return 0 so it uses the long idle interval
     }
 
     private async startColdLoop() {

@@ -16,6 +16,7 @@ interface AppConfig {
     };
     logRetentionDays: number;
     adminProxyImages: boolean;
+    enableCacheTtl: boolean;
 }
 
 const PLACEHOLDER_VALUES = ['YOUR_TMDB_API_KEY_HERE', '', 'your_key_here'];
@@ -67,6 +68,7 @@ function loadConfig(): AppConfig {
         },
         logRetentionDays: raw.logRetentionDays ?? 7,
         adminProxyImages: raw.adminProxyImages !== false, // default true
+        enableCacheTtl: raw.enableCacheTtl === true, // default false
     };
 
     return config;
@@ -74,7 +76,7 @@ function loadConfig(): AppConfig {
 
 export const config = loadConfig();
 
-export function updateConfig(partial: { tmdb?: { apiKey?: string; language?: string; httpProxy?: string; authKey?: string; proxyImages?: boolean; resolveTmdbDns?: boolean }; logRetentionDays?: number; adminProxyImages?: boolean }) {
+export function updateConfig(partial: { tmdb?: { apiKey?: string; language?: string; httpProxy?: string; authKey?: string; proxyImages?: boolean; resolveTmdbDns?: boolean }; logRetentionDays?: number; adminProxyImages?: boolean; enableCacheTtl?: boolean }) {
     if (partial.tmdb?.apiKey) config.tmdb.apiKey = partial.tmdb.apiKey;
     if (partial.tmdb?.language) config.tmdb.language = partial.tmdb.language;
     if (partial.tmdb?.httpProxy !== undefined) config.tmdb.httpProxy = partial.tmdb.httpProxy;
@@ -83,4 +85,5 @@ export function updateConfig(partial: { tmdb?: { apiKey?: string; language?: str
     if (partial.tmdb?.resolveTmdbDns !== undefined) config.tmdb.resolveTmdbDns = partial.tmdb.resolveTmdbDns;
     if (partial.logRetentionDays !== undefined) config.logRetentionDays = partial.logRetentionDays;
     if (partial.adminProxyImages !== undefined) config.adminProxyImages = partial.adminProxyImages;
+    if (partial.enableCacheTtl !== undefined) config.enableCacheTtl = partial.enableCacheTtl;
 }
