@@ -169,6 +169,8 @@
         .poster-badge-movie { background: rgba(236,72,153,0.8); color: #fff; }
         .poster-badge-tv { background: rgba(59,130,246,0.8); color: #fff; }
         .poster-rating { position: absolute; top: 6px; right: 6px; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; background: rgba(0,0,0,0.7); color: #fbbf24; backdrop-filter: blur(8px); }
+        .scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
         .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 12px; aspect-ratio: 2/3; }
         @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
@@ -238,6 +240,21 @@
                 <a href="/" class="btn-ghost rounded-xl px-2 sm:px-3 py-1.5 text-xs transition-all">返回代理</a>
             </div>
         </header>
+
+        <!-- Update notification -->
+        <div id="updateBanner" class="hidden mb-4 rounded-xl bg-gradient-to-r from-violet-500/20 to-pink-500/20 border border-violet-500/30 px-4 py-3 fade-in">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-violet-400 font-semibold">发现新版本</span>
+                    <span id="updateVersion" class="text-white font-mono"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="document.getElementById('updateBody').classList.toggle('hidden')" class="text-xs text-slate-400 hover:text-white transition-colors">更新日志</button>
+                    <a href="https://github.com/2982136527/TmdbCacheX/releases/latest" target="_blank" class="text-xs bg-violet-500/30 hover:bg-violet-500/50 text-violet-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">前往更新</a>
+                </div>
+            </div>
+            <div id="updateBody" class="hidden mt-3 pt-3 border-t border-violet-500/20 text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto scrollbar-hide"></div>
+        </div>
 
         <!-- Stats Panel -->
         <div class="glass rounded-2xl p-5 mb-6 fade-in">
@@ -1134,7 +1151,7 @@
             }
         }
 
-        async function loadConfig() {
+        async function loadConfig(retry) {
             try {
                 const data = await api('/config/raw');
                 const apiKeyInput = document.getElementById('configApiKeyInput');
@@ -1154,6 +1171,7 @@
                 document.getElementById('configPortInput').value = data.server.port;
             } catch (e) {
                 console.error('Failed to load config:', e);
+                if (!retry) setTimeout(() => loadConfig(true), 1000);
             }
         }
 
@@ -1701,6 +1719,18 @@
         loadWarmerStatus();
         // Load adminProxyImages setting on init
         api('/config').then(d => { useAdminProxy = d.adminProxyImages !== false; }).catch(() => {});
+        // Check for updates
+        api('/version').then(d => {
+            if (d.hasUpdate) {
+                document.getElementById('updateVersion').textContent = `v${d.latest}`;
+                if (d.body && d.body.length > 10) {
+                    document.getElementById('updateBody').textContent = d.body;
+                } else {
+                    document.querySelector('#updateBanner button').classList.add('hidden');
+                }
+                document.getElementById('updateBanner').classList.remove('hidden');
+            }
+        }).catch(() => {});
 
         // Jelly Mode init (persisted in localStorage)
         (function initJelly() {

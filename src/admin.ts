@@ -4,6 +4,7 @@ import * as path from 'path';
 import { prisma } from './proxy.js';
 import { config, updateConfig, getConfigPath } from './config.js';
 import { testDnsConnectivity } from './dns-resolver.js';
+import axios from 'axios';
 
 const startTime = Date.now();
 
@@ -18,6 +19,41 @@ export async function adminRoutes(fastify: FastifyInstance, opts: { getWarmer: (
     let statsCache: any = null;
     let statsCacheTime = 0;
     const STATS_TTL = 30_000;
+
+    // Current version from package.json
+    let currentVersion = '0.0.0';
+    try {
+        const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf-8'));
+        currentVersion = pkg.version || '0.0.0';
+    } catch {}
+
+    // GET /admin/api/version - Check for updates (via proxy if configured)
+    fastify.get('/admin/api/version', async () => {
+        try {
+            const proxyUrl = config.tmdb.httpProxy;
+            const axiosCfg: any = { timeout: 8000, headers: { 'User-Agent': 'TmdbCacheX' } };
+            if (proxyUrl) {
+                const url = new URL(proxyUrl);
+                axiosCfg.proxy = { host: url.hostname, port: Number(url.port), protocol: url.protocol.replace(':', '') };
+            }
+            const { data } = await axios.get('https://api.github.com/repos/2982136527/TmdbCacheX/releases/latest', axiosCfg);
+            const latest = (data.tag_name || '').replace(/^v/, '');
+            const body = (data.body || '')
+                .replace(/\*\*Full Changelog\*\*:.*$/ms, '')
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/docker pull.*$/gm, '')
+                .replace(/^#+\s*(Docker|使用方法|支持平台).*$/gim, '')
+                .replace(/\*\*(GitHub Container Registry|Docker Hub|支持平台)\*\*.*$/gm, '')
+                .replace(/ghcr\.io\/.*$/gm, '')
+                .replace(/qiuhusama\/.*$/gm, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim()
+                .slice(0, 1000);
+            return { current: currentVersion, latest, hasUpdate: latest !== currentVersion, body };
+        } catch {
+            return { current: currentVersion, latest: currentVersion, hasUpdate: false, body: '' };
+        }
+    });
 
     // GET /admin/api/stats - Cache statistics (with 30s in-memory cache)
     fastify.get('/admin/api/stats', async () => {

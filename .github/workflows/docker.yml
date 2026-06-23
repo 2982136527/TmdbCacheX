@@ -67,34 +67,20 @@ jobs:
           repository: ${{ steps.meta.outputs.DH_IMAGE }}
           readme-filepath: ./dockerhub-description.md
 
+      - name: Read release notes
+        id: notes
+        run: |
+          if [ -f release-notes.md ]; then
+            echo "body<<RELEASE_EOF" >> $GITHUB_OUTPUT
+            cat release-notes.md >> $GITHUB_OUTPUT
+            echo "RELEASE_EOF" >> $GITHUB_OUTPUT
+          else
+            echo "body=版本 v${{ steps.meta.outputs.VERSION }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: v${{ steps.meta.outputs.VERSION }}
-          body: |
-            ## Docker 镜像
-
-            **GitHub Container Registry:**
-            ```
-            docker pull ghcr.io/${{ steps.meta.outputs.GHCR_IMAGE }}:${{ steps.meta.outputs.VERSION }}
-            docker pull ghcr.io/${{ steps.meta.outputs.GHCR_IMAGE }}:latest
-            ```
-
-            **Docker Hub:**
-            ```
-            docker pull ${{ steps.meta.outputs.DH_IMAGE }}:${{ steps.meta.outputs.VERSION }}
-            docker pull ${{ steps.meta.outputs.DH_IMAGE }}:latest
-            ```
-
-            **支持平台:** `linux/amd64`, `linux/arm64`
-
-            ## 使用方法
-
-            ```bash
-            docker run -d \
-              -p 3333:3333 \
-              -v /你的数据目录:/app/data \
-              ghcr.io/${{ steps.meta.outputs.GHCR_IMAGE }}:latest
-            ```
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.body }}
